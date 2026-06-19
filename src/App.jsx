@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 
 // ── Brand tokens matching the physical menu ──────────────────────────
 const G = {
@@ -17,8 +17,6 @@ const G = {
 
 const PROTEINS   = ["Camarón","Res","Pollo","Tocino","Surimi","Tampico"];
 const SAUCES     = ["BBQ","Búfalo","Mixto"];
-const EXTRAS_ROLL = 20;
-const EXTRAS_PLAT = 30;
 const BOMBA_PRICE = 25;
 
 const MENU = {
