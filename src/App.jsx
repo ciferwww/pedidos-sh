@@ -26,12 +26,13 @@ const G = {
 
 const PROTEINS_SUSHI  = ["Camarón","Res","Pollo","Tocino","Surimi","Tampico"];
 const PROTEINS_BURGER = ["Res","Pollo","Camarón"];
-// Eliminamos PROTEINS_PLAT y SUSHI_EXTRAS si no se mapean en la interfaz para evitar el error CI
+const PROTEINS_PLAT   = ["Res","Pollo","Camarón"];
 const SAUCES_BONELESS = ["BBQ", "Mitad y Mitad", "Búfalo", "Mixto"];
 const SAUCES_ROLL     = ["BBQ", "Búfalo", "Mixto"];
 const BOMBA_PRICE     = 25;
 const EXTRA_SUSHI     = 20;
 const EXTRA_PLAT      = 30;
+const SUSHI_EXTRAS    = ["Philadelphia","Gratinado"];
 
 const MENU = {
   Botanas: [
