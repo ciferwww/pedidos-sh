@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 
 // ── REEMPLAZA CON TU CONFIGURACIÓN DE FIREBASE ───────────────────────
 const firebaseConfig = {
