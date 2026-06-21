@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 // ── REEMPLAZA CON TU CONFIGURACIÓN DE FIREBASE ───────────────────────
 const firebaseConfig = {
@@ -26,13 +26,12 @@ const G = {
 
 const PROTEINS_SUSHI  = ["Camarón","Res","Pollo","Tocino","Surimi","Tampico"];
 const PROTEINS_BURGER = ["Res","Pollo","Camarón"];
-const PROTEINS_PLAT   = ["Res","Pollo","Camarón"];
+// Eliminamos PROTEINS_PLAT y SUSHI_EXTRAS si no se mapean en la interfaz para evitar el error CI
 const SAUCES_BONELESS = ["BBQ", "Mitad y Mitad", "Búfalo", "Mixto"];
 const SAUCES_ROLL     = ["BBQ", "Búfalo", "Mixto"];
 const BOMBA_PRICE     = 25;
 const EXTRA_SUSHI     = 20;
 const EXTRA_PLAT      = 30;
-const SUSHI_EXTRAS    = ["Philadelphia","Gratinado"];
 
 const MENU = {
   Botanas: [
