@@ -69,7 +69,7 @@ const MENU_POS = {
     {id:"p7",name:"Chicken roll",price:170},{id:"p8",name:"Gohan especial",price:170},
   ],
   Hamburguesas:[
-    {id:"h1",name:"Sensilla",price:130,burgerProtein:true},{id:"h2",name:"Doble",price:155},
+    {id:"h1",name:"Sencilla",price:130,burgerProtein:true},{id:"h2",name:"Doble",price:155},
     {id:"h3",name:"Mushroom",price:140,burgerProtein:true},{id:"h4",name:"Guacamole",price:140,burgerProtein:true},
     {id:"h5",name:"Norteña",price:175,burgerProtein:true},{id:"h6",name:"Bonneless",price:140,sauce:"boneless"},
     {id:"h7",name:"Cielo Mar y Tierra",price:175},
@@ -156,12 +156,13 @@ function OrderCard({ pedido, onChangeEstado }) {
               <div key={i} style={{display:"flex",justifyContent:"space-between",
                 padding:"4px 0",borderBottom:`1px solid ${G.divider}33`}}>
                 <div>
-                  <span style={{color:G.dark,fontWeight:700,fontSize:13}}>
+                  <span style={{color:G.dark,fontWeight:700,fontSize:13 suicide}}>
                     {a.cantidad>1&&`${a.cantidad}× `}{a.nombre}
                     {a.bomba&&<span style={{color:"#c0392b",fontSize:10,marginLeft:4}}>💣</span>}
                   </span>
                   {a.proteina&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>({a.proteina})</span>}
                   {a.salsa&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>[{a.salsa}]</span>}
+                  {a.alga !== null && <span style={{color:G.textSub,fontSize:11,marginLeft:5}}>({a.alga ? "🌿 Con alga" : "Sin alga"})</span>}
                   {a.extras?.length>0&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>+{a.extras.join(",")} </span>}
                   {a.nota&&<p style={{color:"#e67e22",fontSize:11,margin:"2px 0 0",fontStyle:"italic"}}>📝 {a.nota}</p>}
                 </div>
@@ -191,6 +192,7 @@ function OrderCard({ pedido, onChangeEstado }) {
 
 // ── POS ──────────────────────────────────────────────────────────────
 function POS({ onPedidoCreado }) {
+  const isMobile = window.innerWidth < 768;
   const [cat,setCat]=useState("Sushi");
   const [cart,setCart]=useState([]);
   const [mesa,setMesa]=useState("");
@@ -198,31 +200,36 @@ function POS({ onPedidoCreado }) {
   const [showQuick,setShowQuick]=useState(null); // item que necesita opciones rápidas
   const [tempProtein,setTempProtein]=useState(null);
   const [tempSauce,setTempSauce]=useState(null);
+  const [tempAlga, setTempAlga] = useState(true);
   const [sending,setSending]=useState(false);
 
   const total=cart.reduce((s,i)=>s+i.subtotal,0);
 
   const addItem=(item)=>{
-    if(item.protein||item.burgerProtein||item.sauce){
-      setShowQuick(item); setTempProtein(null); setTempSauce(null);
+    const isSushi = cat === "Sushi";
+    if(item.protein||item.burgerProtein||item.sauce||isSushi){
+      setShowQuick({ ...item, isSushi }); 
+      setTempProtein(null); 
+      setTempSauce(null);
+      setTempAlga(true);
     } else {
       setCart(prev=>{
-        const ex=prev.findIndex(c=>c.id===item.id&&!c.protein&&!c.salsa);
+        const ex=prev.findIndex(c=>c.id===item.id&&!c.protein&&!c.salsa&&c.alga===null);
         if(ex>=0){ const n=[...prev]; n[ex]={...n[ex],cantidad:n[ex].cantidad+1,subtotal:(n[ex].cantidad+1)*n[ex].precio}; return n; }
-        return [...prev,{...item,id:item.id,nombre:item.name,precio:item.price,cantidad:1,subtotal:item.price,protein:"",salsa:""}];
+        return [...prev,{...item,id:item.id,nombre:item.name,precio:item.price,cantidad:1,subtotal:item.price,protein:"",salsa:"",alga:null}];
       });
     }
   };
 
   const confirmQuick=()=>{
     const item=showQuick;
-    const proteins=item.burgerProtein?PROTEINS_BURGER:PROTEINS_SUSHI;
     if((item.protein||item.burgerProtein)&&!tempProtein){ alert("Elige proteína"); return; }
     if(item.sauce&&!tempSauce){ alert("Elige salsa"); return; }
     setCart(prev=>[...prev,{
       id:item.id+"-"+Date.now(), nombre:item.name, precio:item.price,
       cantidad:1, subtotal:item.price,
-      proteina:tempProtein||"", salsa:tempSauce||""
+      proteina:tempProtein||"", salsa:tempSauce||"",
+      alga: showQuick.isSushi ? tempAlga : null
     }]);
     setShowQuick(null);
   };
@@ -247,7 +254,8 @@ function POS({ onPedidoCreado }) {
         mesa:mesa||"",
         articulos:cart.map(i=>({
           nombre:i.nombre,cantidad:i.cantidad,proteina:i.proteina||"",
-          salsa:i.salsa||"",bomba:false,extras:[],platExtras:[],nota:"",subtotal:i.subtotal
+          salsa:i.salsa||"",bomba:false,extras:[],platExtras:[],nota:"",subtotal:i.subtotal,
+          alga: i.alga ?? null
         })),
         total, estado:"listo", origen:"pos", creadoEn:serverTimestamp(),
       });
@@ -257,7 +265,7 @@ function POS({ onPedidoCreado }) {
   };
 
   return (
-    <div style={{display:"flex",gap:0,height:"calc(100vh - 60px)"}}>
+    <div style={{display:"flex", flexDirection: isMobile?"column":"row",gap:0, height: isMobile?"auto":"calc(100vh - 60px)"}}>
 
       {/* Quick options modal */}
       {showQuick&&(
@@ -281,6 +289,22 @@ function POS({ onPedidoCreado }) {
                 </div>
               </div>
             )}
+            
+            {showQuick.isSushi && (
+              <div style={{marginBottom:12}}>
+                <p style={{color:G.textSub,fontSize:11,fontWeight:800,margin:"0 0 6px",letterSpacing:1}}>ALGA</p>
+                <div style={{display:"flex",gap:6}}>
+                  {["Con alga 🌿","Sin alga"].map((a,i)=>(
+                    <button key={a} onClick={()=>setTempAlga(i===0)} style={{
+                      padding:"5px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
+                      border:`1.5px solid ${tempAlga===(i===0)?G.gold:G.divider}`,
+                      background:tempAlga===(i===0)?G.gold:"transparent",
+                      color:tempAlga===(i===0)?G.dark:G.textSub}}>{a}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {showQuick.sauce&&(
               <div style={{marginBottom:14}}>
                 <p style={{color:G.textSub,fontSize:11,fontWeight:800,margin:"0 0 6px",letterSpacing:1}}>SALSA</p>
@@ -337,7 +361,7 @@ function POS({ onPedidoCreado }) {
       </div>
 
       {/* RIGHT — Cart */}
-      <div style={{width:280,background:"#fff",borderLeft:`2px solid ${G.divider}`,
+      <div style={{width: isMobile?"100%":280,maxHeight: isMobile?350:"none",background:"#fff",borderLeft:`2px solid ${G.divider}`,
         display:"flex",flexDirection:"column"}}>
         {/* Mesa */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${G.divider}`,background:G.offWhite}}>
@@ -360,6 +384,7 @@ function POS({ onPedidoCreado }) {
                 <p style={{color:G.dark,fontWeight:700,fontSize:13,margin:0}}>{item.nombre}</p>
                 {item.proteina&&<p style={{color:G.textSub,fontSize:11,margin:"1px 0 0"}}>{item.proteina}</p>}
                 {item.salsa&&<p style={{color:G.textSub,fontSize:11,margin:0}}>[{item.salsa}]</p>}
+                {item.alga !== null && <p style={{color:G.textSub,fontSize:10,margin:0}}>  {item.alga?"🌿 Con alga":"Sin alga"}</p>}
               </div>
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <button onClick={()=>changeQty(i,-1)} style={smallBtn}>−</button>
@@ -595,6 +620,7 @@ function Config() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────
 function Dashboard({ onLogout }) {
+  const isMobile = window.innerWidth < 768;
   const [tab,setTab]=useState("pedidos");
   const [pedidos,setPedidos]=useState([]);
   const [loading,setLoading]=useState(true);

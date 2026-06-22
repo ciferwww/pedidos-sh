@@ -93,7 +93,7 @@ const MENU = {
     { id:"e3", name:"Ensalada light",    price:160, desc:"Pechuga de pollo a la plancha con lechuga, arúgula, espinaca, pepino, zanahoria, aceitunas, alcaparras, rábano y cebolla morada." },
   ],
   Hamburguesas: [
-    { id:"h1", name:"Sensilla",           price:130, desc:"Carne a elección con queso americano. Incluye aderezo especial, tomate, lechuga, cebolla y papas.", hasBurgerProtein:true },
+    { id:"h1", name:"Sencilla",           price:130, desc:"Carne a elección con queso americano. Incluye aderezo especial, tomate, lechuga, cebolla y papas.", hasBurgerProtein:true },
     { id:"h2", name:"Doble",              price:155, desc:"2 pz de Res, queso americano, queso gratinado con tocino. Incluye aderezo especial, tomate, lechuga, cebolla y papas." },
     { id:"h3", name:"Mushroom",           price:140, desc:"Carne a elección con queso americano, tocino, queso gratinado y champiñones salteados.", hasBurgerProtein:true },
     { id:"h4", name:"Guacamole",          price:140, desc:"Carne a elección, tocino con queso americano y guacamole.", hasBurgerProtein:true },
@@ -145,6 +145,7 @@ function MenuItem({ item, onAdd }) {
   const [platExtras, setPlatExtras] = useState([]); // platillo protein extras
   const [note,    setNote]    = useState("");
   const [qty,     setQty]     = useState(1);
+  const [alga, setAlga] = useState(false); // true = con alga (default)
 
   const toggleSushiExtra = (e) =>
     setExtras(prev => prev.includes(e) ? prev.filter(x=>x!==e) : [...prev,e]);
@@ -162,10 +163,9 @@ function MenuItem({ item, onAdd }) {
     if (item.hasProtein && !protein)       { alert("Elige una proteína."); return; }
     if (item.hasBurgerProtein && !protein) { alert("Elige la carne de tu hamburguesa."); return; }
     if (item.sauceOptions && !sauce)       { alert("Elige una salsa."); return; }
-    onAdd({ ...item, protein, sauce, bomba, extras, platExtras, note, qty, totalPrice:total });
-    setOpen(false); setProtein(null); setSauce(null);
-    setBomba(false); setExtras([]); setPlatExtras([]); setNote(""); setQty(1);
-  };
+onAdd({ ...item, protein, sauce, bomba, extras, platExtras, alga: item.isSushi ? alga : null, note, qty, totalPrice:total });
+setOpen(false); setProtein(null); setSauce(null);
+setBomba(false); setExtras([]); setPlatExtras([]); setAlga(true); setNote(""); setQty(1);
 
   const proteins = item.hasBurgerProtein ? PROTEINS_BURGER
                  : item.hasProtein       ? PROTEINS_SUSHI
@@ -234,6 +234,14 @@ function MenuItem({ item, onAdd }) {
                   <Chip key={e} label={e} active={extras.includes(e)}
                     onClick={()=>toggleSushiExtra(e)} small />
                 ))}
+                {/* Con / Sin alga */}
+<div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
+  <Label>Alga</Label>
+  <div style={{display:"flex",gap:6}}>
+    <Chip label="🌿 Con alga" active={alga===true}  onClick={()=>setAlga(true)} />
+    <Chip label="Sin alga"   active={alga===false} onClick={()=>setAlga(false)} />
+  </div>
+</div>
               </div>
               {/* Bomba */}
               <div style={{marginTop:8}}>
@@ -434,6 +442,10 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
                   {item.sauce&&<p style={{color:G.textSub,fontSize:12,margin:"2px 0 0"}}>Salsa: {item.sauce}</p>}
                   {item.extras?.length>0&&<p style={{color:G.textSub,fontSize:12,margin:"2px 0 0"}}>Extras: {item.extras.join(", ")}</p>}
                   {item.platExtras?.length>0&&<p style={{color:G.textSub,fontSize:12,margin:"2px 0 0"}}>Proteína extra: {item.platExtras.join(", ")}</p>}
+                  {item.alga !== null && item.alga !== undefined &&
+                   <p style={{color:G.textSub,fontSize:12,margin:"2px 0 0"}}>
+                    Alga: {item.alga ? "Con alga 🌿" : "Sin alga"}
+                   </p>}
                   {item.note&&<p style={{color:G.textSub,fontSize:12,margin:"2px 0 0",fontStyle:"italic"}}>📝 {item.note}</p>}
                 </div>
               ))}
@@ -607,6 +619,8 @@ export default function App() {
       if(item.sauce)   msg+=`   • Salsa: ${item.sauce}\n`;
       if(item.extras?.length) msg+=`   • Extras: ${item.extras.join(", ")}\n`;
       if(item.platExtras?.length) msg+=`   • Proteína extra: ${item.platExtras.join(", ")}\n`;
+      if(item.alga !== null && item.alga !== undefined)
+      msg += `   • Alga: ${item.alga ? "Con alga" : "Sin alga"}\n`;
       if(item.note)    msg+=`   • Nota: ${item.note}\n`;
     });
     if(delivery==="domicilio") msg+=`\n🛵 Envío: $${deliveryCost}\n`;
@@ -626,6 +640,7 @@ export default function App() {
           salsa:i.sauce||"", bomba:i.bomba||false,
           extras:i.extras||[], platExtras:i.platExtras||[],
           nota:i.note||"", subtotal:i.totalPrice,
+          alga: i.alga ?? null,
         })),
         total, estado:"nuevo", origen:"web", creadoEn:serverTimestamp(),
       });
