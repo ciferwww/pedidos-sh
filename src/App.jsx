@@ -163,9 +163,10 @@ function MenuItem({ item, onAdd }) {
     if (item.hasProtein && !protein)       { alert("Elige una proteína."); return; }
     if (item.hasBurgerProtein && !protein) { alert("Elige la carne de tu hamburguesa."); return; }
     if (item.sauceOptions && !sauce)       { alert("Elige una salsa."); return; }
-onAdd({ ...item, protein, sauce, bomba, extras, platExtras, alga: item.isSushi ? alga : null, note, qty, totalPrice:total });
-setOpen(false); setProtein(null); setSauce(null);
-setBomba(false); setExtras([]); setPlatExtras([]); setAlga(true); setNote(""); setQty(1);
+    onAdd({ ...item, protein, sauce, bomba, extras, platExtras, alga: item.isSushi ? alga : null, note, qty, totalPrice:total });
+    setOpen(false); setProtein(null); setSauce(null);
+    setBomba(false); setExtras([]); setPlatExtras([]); setAlga(true); setNote(""); setQty(1);
+  };
 
   const proteins = item.hasBurgerProtein ? PROTEINS_BURGER
                  : item.hasProtein       ? PROTEINS_SUSHI
@@ -235,13 +236,13 @@ setBomba(false); setExtras([]); setPlatExtras([]); setAlga(true); setNote(""); s
                     onClick={()=>toggleSushiExtra(e)} small />
                 ))}
                 {/* Con / Sin alga */}
-<div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
-  <Label>Alga</Label>
-  <div style={{display:"flex",gap:6}}>
-    <Chip label="🌿 Con alga" active={alga===true}  onClick={()=>setAlga(true)} />
-    <Chip label="Sin alga"   active={alga===false} onClick={()=>setAlga(false)} />
-  </div>
-</div>
+                <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
+                  <Label>Alga</Label>
+                  <div style={{display:"flex",gap:6}}>
+                    <Chip label="🌿 Con alga" active={alga===true}  onClick={()=>setAlga(true)} />
+                    <Chip label="Sin alga"   active={alga===false} onClick={()=>setAlga(false)} />
+                  </div>
+                </div>
               </div>
               {/* Bomba */}
               <div style={{marginTop:8}}>

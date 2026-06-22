@@ -156,7 +156,7 @@ function OrderCard({ pedido, onChangeEstado }) {
               <div key={i} style={{display:"flex",justifyContent:"space-between",
                 padding:"4px 0",borderBottom:`1px solid ${G.divider}33`}}>
                 <div>
-                  <span style={{color:G.dark,fontWeight:700,fontSize:13 suicide}}>
+                  <span style={{color:G.dark,fontWeight:700,fontSize:13}}>
                     {a.cantidad>1&&`${a.cantidad}× `}{a.nombre}
                     {a.bomba&&<span style={{color:"#c0392b",fontSize:10,marginLeft:4}}>💣</span>}
                   </span>
