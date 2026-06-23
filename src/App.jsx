@@ -17,7 +17,7 @@ export default function AppRoot() {
 }
 
 // ────────────────────────────────────────────────────────────────────
-const WHATSAPP_NUMBER = "526441234567";
+const WHATSAPP_NUMBER = "526442049243";
 
 const G = {
   gold:      "#B8892A", goldLight: "#C9A84C", goldBg: "#7a4f1e",
