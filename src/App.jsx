@@ -1,20 +1,20 @@
-import { useState } from "react";
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  addDoc, serverTimestamp, getDoc, setDoc, onSnapshot,
+  updateDoc, increment,
+} from "firebase/firestore";
+import { useTenant, useIsClosedHours, TenantProvider } from "./TenantContext";
 
-// ── REEMPLAZA CON TU CONFIGURACIÓN DE FIREBASE ───────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyBDvEi4Fd-fWi3UgYrtmOq_jnKvoay4tfs",
-  authDomain: "shekinah-pedidos.firebaseapp.com",
-  projectId: "shekinah-pedidos",
-  storageBucket: "shekinah-pedidos.firebasestorage.app",
-  messagingSenderId: "665781041109",
-  appId: "1:665781041109:web:2d1e566882fa2f4733ef5c"
-};
-const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
+// ─── Re-exportamos app envuelto en TenantProvider ────────────────────
+export default function AppRoot() {
+  return (
+    <TenantProvider>
+      <App />
+    </TenantProvider>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────
-
 const WHATSAPP_NUMBER = "526441234567";
 
 const G = {
@@ -34,92 +34,114 @@ const EXTRA_SUSHI     = 20;
 const EXTRA_PLAT      = 30;
 const SUSHI_EXTRAS    = ["Philadelphia","Gratinado"];
 
-const MENU = {
+// ─── Static menu (used as fallback when Firestore is unreachable) ────
+const MENU_STATIC = {
   Botanas: [
-    { id:"b1",  name:"Gohan",               price:150, desc:"Base de arroz, mix de camarón, res, pollo, pepino, cubierto de zanahoria, con abanico de aguacate, tampico y philadelphia." },
-    { id:"b2",  name:"Rocachicken",          price:140, desc:"Tiras de pollo crujientes, acompañado con arroz, Tampico, aguacate y zanahoria." },
-    { id:"b3",  name:"Boneless",             price:140, desc:"300g de tiras de pollo en salsa a elegir.", sauceOptions:"boneless" },
-    { id:"b4",  name:"Alitas",               price:140, desc:"500g de alitas en salsa a elegir.", sauceOptions:"boneless" },
-    { id:"b5",  name:"Tortuguita",           price:95,  desc:"Milanesa de camarón cubierta de Philadelphia, Tampico y aguacate sobre zanahoria." },
-    { id:"b6",  name:"Tempura veggies",      price:120, desc:"Mix de vegetales capeados con aderezo ranch." },
-    { id:"b7",  name:"Chile hot",            price:105, desc:"Chile verde relleno de res, gratinado, acompañado de arroz, tampico y aguacate." },
-    { id:"b8",  name:"Hot bite",             price:95,  desc:"Chile caribe con Philadelphia, queso gratinado, tampico, camarón y envuelto en tocino." },
-    { id:"b9",  name:"Salchipulpos",         price:85,  desc:"Papas a la francesa con salchichas, cubiertas de queso amarillo y tocino." },
-    { id:"b10", name:"Nuguets de pollo",     price:85,  desc:"Con papas fritas, aderezo ranch y catsup." },
-    { id:"b11", name:"Aros de cebolla",      price:80,  desc:"10 piezas con aderezo ranch." },
-    { id:"b12", name:"Papas sazonadas",      price:85,  desc:"300g con queso amarillo." },
-    { id:"b13", name:"Papas a la francesa",  price:70,  desc:"Con catsup." },
-    { id:"b14", name:"Dedos de queso",       price:80,  desc:"6 pz de queso mozzarella empanizados sobre zanahoria." },
-    { id:"b15", name:"Dedos de queso sazonados", price:80, desc:"6 pz de queso mozzarella empanizados con salsa de ponmodoro y queso parmezano." },
-    { id:"b16", name:"Bolitas Philadelphia", price:80,  desc:"8 pz sobre zanahoria." },
-    { id:"b17", name:"Tocibolitas",          price:85,  desc:"8 pz sobre zanahoria." },
-    { id:"b18", name:"Sampler",              price:320, desc:"Sushi a elegir del menu, ½ orden de: boneless, papas sazonadas, dedos queso, aros cebolla, tampico, ranch y queso amarillo." },
+    { id:"b1",  name:"Gohan",               price:150, desc:"Base de arroz, mix de camarón, res, pollo, pepino, cubierto de zanahoria, con abanico de aguacate, tampico y philadelphia.", tags:["Popular"] },
+    { id:"b2",  name:"Rocachicken",          price:140, desc:"Tiras de pollo crujientes, acompañado con arroz, Tampico, aguacate y zanahoria.", tags:[] },
+    { id:"b3",  name:"Boneless",             price:140, desc:"300g de tiras de pollo en salsa a elegir.", sauceOptions:"boneless", tags:["Popular","Picante"] },
+    { id:"b4",  name:"Alitas",               price:140, desc:"500g de alitas en salsa a elegir.", sauceOptions:"boneless", tags:["Picante"] },
+    { id:"b5",  name:"Tortuguita",           price:95,  desc:"Milanesa de camarón cubierta de Philadelphia, Tampico y aguacate sobre zanahoria.", tags:["Individual"] },
+    { id:"b6",  name:"Tempura veggies",      price:120, desc:"Mix de vegetales capeados con aderezo ranch.", tags:["Individual"] },
+    { id:"b7",  name:"Chile hot",            price:105, desc:"Chile verde relleno de res, gratinado, acompañado de arroz, tampico y aguacate.", tags:["Picante"] },
+    { id:"b8",  name:"Hot bite",             price:95,  desc:"Chile caribe con Philadelphia, queso gratinado, tampico, camarón y envuelto en tocino.", tags:["Picante","Individual"] },
+    { id:"b9",  name:"Salchipulpos",         price:85,  desc:"Papas a la francesa con salchichas, cubiertas de queso amarillo y tocino.", tags:["Individual"] },
+    { id:"b10", name:"Nuguets de pollo",     price:85,  desc:"Con papas fritas, aderezo ranch y catsup.", tags:["Individual"] },
+    { id:"b11", name:"Aros de cebolla",      price:80,  desc:"10 piezas con aderezo ranch.", tags:["Individual"] },
+    { id:"b12", name:"Papas sazonadas",      price:85,  desc:"300g con queso amarillo.", tags:["Individual"] },
+    { id:"b13", name:"Papas a la francesa",  price:70,  desc:"Con catsup.", tags:["Individual"] },
+    { id:"b14", name:"Dedos de queso",       price:80,  desc:"6 pz de queso mozzarella empanizados sobre zanahoria.", tags:["Individual"] },
+    { id:"b15", name:"Dedos de queso sazonados", price:80, desc:"6 pz de queso mozzarella empanizados con salsa de ponmodoro y queso parmezano.", tags:["Individual"] },
+    { id:"b16", name:"Bolitas Philadelphia", price:80,  desc:"8 pz sobre zanahoria.", tags:["Individual"] },
+    { id:"b17", name:"Tocibolitas",          price:85,  desc:"8 pz sobre zanahoria.", tags:["Individual"] },
+    { id:"b18", name:"Sampler",              price:320, desc:"Sushi a elegir del menu, ½ orden de: boneless, papas sazonadas, dedos queso, aros cebolla, tampico, ranch y queso amarillo.", tags:["Popular"] },
   ],
   Sushi: [
-    { id:"s1",  name:"Vegetariano roll",    price:90,  desc:"D: Zanahoria, pepino y aguacate.", isSushi:true },
-    { id:"s2",  name:"California roll",     price:105, desc:"Ingrediente a elegir (camarón, res, pollo, tocino, surimi o tampico).", hasProtein:true, isSushi:true },
-    { id:"s3",  name:"Nevado roll",         price:120, desc:"D: Camarón · F: Queso Philadelphia.", hasProtein:true, isSushi:true },
-    { id:"s4",  name:"Chipotle roll",       price:120, desc:"D: Camarón empanizado · F: Gratinado con salsa chipotle.", hasProtein:true, isSushi:true },
-    { id:"s5",  name:"Torito roll",         price:130, desc:"D: Camarón, tocino, chile caribe y salsa chipotle especial · F: Gratinado.", hasProtein:true, isSushi:true },
-    { id:"s6",  name:"Subarachi roll",      price:125, desc:"D: Camarón · F: Cubierto de Philadelphia y tampico.", hasProtein:true, isSushi:true },
-    { id:"s7",  name:"Coso roll",           price:125, desc:"D: Camarón, chile caribe · F: Zanahoria capeada y aderezo serrano.", hasProtein:true, isSushi:true },
-    { id:"s8",  name:"Almond roll",         price:125, desc:"D: Camarón capeado · F: Philadelphia, almendras y aderezo de piña picosa.", hasProtein:true, isSushi:true },
-    { id:"s9",  name:"Bacon roll",          price:130, desc:"D: Camarón, tocino · F: Tampico especial.", hasProtein:true, isSushi:true },
-    { id:"s10", name:"Boston roll",         price:130, desc:"D: Camarón empanizado · F: Philadelphia y tocino.", hasProtein:true, isSushi:true },
-    { id:"s11", name:"Cielo mar y tierra",  price:135, desc:"D: Camarón, Res y pollo.", isSushi:true },
-    { id:"s12", name:"Sparrow roll",        price:135, desc:"D: Res, tocino · F: Philadelphia y chile verde.", hasProtein:true, isSushi:true },
-    { id:"s13", name:"Sonora roll",         price:135, desc:"D: Res, tocino, cebolla asada, chile carive y verde · F: Philadelphia y aguacate.", hasProtein:true, isSushi:true },
-    { id:"s14", name:"Supremo roll",        price:135, desc:"D: Arroz amasado con Philadelphia, res, tocino, chile caribe · F: Queso gratinado.", hasProtein:true, isSushi:true },
-    { id:"s15", name:"Bonneles roll",       price:140, desc:"D: Pollo · F: Boneless, salsa a elegir.", hasProtein:true, sauceOptions:"roll", isSushi:true },
-    { id:"s16", name:"Tocino roll",         price:140, desc:"D: Camarón, res, tocino, chile caribe · F: Philadelphia con tocino.", hasProtein:true, isSushi:true },
-    { id:"s17", name:"Especial roll",       price:140, desc:"D: Camarón y surimi empanizado · F: Topping especial y aderezo cilantro.", hasProtein:true, isSushi:true },
-    { id:"s18", name:"Philip roll",         price:140, desc:"D: Res, pollo, tocino · F: Queso gratinado con tocino.", hasProtein:true, isSushi:true },
-    { id:"s19", name:"3 Quesos roll",       price:140, desc:"D: Camarón, res, pollo empanizado · F: Philadelphia, queso americano y gratinado.", hasProtein:true, isSushi:true },
-    { id:"s20", name:"Shekinah roll",       price:145, desc:"D: Arroz amasado con Philadelphia, cebollín, chile serrano, camarón, res y pollo · F: Philadelphia, gratinado y tocino.", hasProtein:true, isSushi:true },
+    { id:"s1",  name:"Vegetariano roll",    price:90,  desc:"D: Zanahoria, pepino y aguacate.", isSushi:true, tags:["Individual"] },
+    { id:"s2",  name:"California roll",     price:105, desc:"Ingrediente a elegir (camarón, res, pollo, tocino, surimi o tampico).", hasProtein:true, isSushi:true, tags:["Popular"] },
+    { id:"s3",  name:"Nevado roll",         price:120, desc:"D: Camarón · F: Queso Philadelphia.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s4",  name:"Chipotle roll",       price:120, desc:"D: Camarón empanizado · F: Gratinado con salsa chipotle.", hasProtein:true, isSushi:true, tags:["Picante"] },
+    { id:"s5",  name:"Torito roll",         price:130, desc:"D: Camarón, tocino, chile caribe y salsa chipotle especial · F: Gratinado.", hasProtein:true, isSushi:true, tags:["Picante"] },
+    { id:"s6",  name:"Subarachi roll",      price:125, desc:"D: Camarón · F: Cubierto de Philadelphia y tampico.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s7",  name:"Coso roll",           price:125, desc:"D: Camarón, chile caribe · F: Zanahoria capeada y aderezo serrano.", hasProtein:true, isSushi:true, tags:["Picante"] },
+    { id:"s8",  name:"Almond roll",         price:125, desc:"D: Camarón capeado · F: Philadelphia, almendras y aderezo de piña picosa.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s9",  name:"Bacon roll",          price:130, desc:"D: Camarón, tocino · F: Tampico especial.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s10", name:"Boston roll",         price:130, desc:"D: Camarón empanizado · F: Philadelphia y tocino.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s11", name:"Cielo mar y tierra",  price:135, desc:"D: Camarón, Res y pollo.", isSushi:true, tags:["Popular"] },
+    { id:"s12", name:"Sparrow roll",        price:135, desc:"D: Res, tocino · F: Philadelphia y chile verde.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s13", name:"Sonora roll",         price:135, desc:"D: Res, tocino, cebolla asada, chile carive y verde · F: Philadelphia y aguacate.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s14", name:"Supremo roll",        price:135, desc:"D: Arroz amasado con Philadelphia, res, tocino, chile caribe · F: Queso gratinado.", hasProtein:true, isSushi:true, tags:["Popular"] },
+    { id:"s15", name:"Bonneles roll",       price:140, desc:"D: Pollo · F: Boneless, salsa a elegir.", hasProtein:true, sauceOptions:"roll", isSushi:true, tags:["Picante"] },
+    { id:"s16", name:"Tocino roll",         price:140, desc:"D: Camarón, res, tocino, chile caribe · F: Philadelphia con tocino.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s17", name:"Especial roll",       price:140, desc:"D: Camarón y surimi empanizado · F: Topping especial y aderezo cilantro.", hasProtein:true, isSushi:true, tags:["Popular"] },
+    { id:"s18", name:"Philip roll",         price:140, desc:"D: Res, pollo, tocino · F: Queso gratinado con tocino.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s19", name:"3 Quesos roll",       price:140, desc:"D: Camarón, res, pollo empanizado · F: Philadelphia, queso americano y gratinado.", hasProtein:true, isSushi:true, tags:[] },
+    { id:"s20", name:"Shekinah roll",       price:145, desc:"D: Arroz amasado con Philadelphia, cebollín, chile serrano, camarón, res y pollo · F: Philadelphia, gratinado y tocino.", hasProtein:true, isSushi:true, tags:["Popular","Picante"] },
   ],
   Platillos: [
-    { id:"p1", name:"Teriyaki",                  price:170, desc:"Camarón, res y pollo salteados con trozos de piña en nuestra salsa de la casa, sobre arroz blanco y vegetales salteados.", hasExtras:true },
-    { id:"p2", name:"Tepanyaki",                 price:170, desc:"Camarón, res y pollo salteados en nuestra salsa de la casa, sobre arroz blanco con vegetales salteados.", hasExtras:true },
-    { id:"p3", name:"Yakimeshi",                 price:170, desc:"Deliciosa mezcla de arroz frito con camarón, res y pollo, acompañada de topping de tampico, abanico de aguacate y bolitas de queso Philadelphia.", hasExtras:true },
-    { id:"p4", name:"Kung pao",                  price:170, desc:"Tiras de pollo bañadas en salsa agridulce picosa, con vegetales salteados, cacahuates, chile de árbol y elotes baby.", hasExtras:true },
-    { id:"p5", name:"Pechuga tokiyaki",          price:170, desc:"Pechuga de pollo en tiras (a la plancha o empanizada), bañada en aderezo cilantro, sobre vegetales salteados y arroz frito.", hasExtras:true },
-    { id:"p6", name:"Pechuga en crema chipotle", price:170, desc:"Tiras de pollo en crema chipotle, con vegetales salteados, sobre arroz frito.", hasExtras:true },
-    { id:"p7", name:"Chicken roll",              price:170, desc:"Pechuga de pollo rellena de camarón, tocino, pimientos y queso Philadelphia, calabaza, zanahoria, sobre arroz frito y ensalada de la casa.", hasExtras:true },
-    { id:"p8", name:"Gohan especial",            price:170, desc:"Base de arroz empanizado y gratinado, con vegetales salteados, camarón, res y pollo, coronado con abanico de aguacate, tampico y queso Philadelphia.", hasExtras:true },
+    { id:"p1", name:"Teriyaki",                  price:170, desc:"Camarón, res y pollo salteados con trozos de piña en nuestra salsa de la casa, sobre arroz blanco y vegetales salteados.", hasExtras:true, tags:["Popular"] },
+    { id:"p2", name:"Tepanyaki",                 price:170, desc:"Camarón, res y pollo salteados en nuestra salsa de la casa, sobre arroz blanco con vegetales salteados.", hasExtras:true, tags:[] },
+    { id:"p3", name:"Yakimeshi",                 price:170, desc:"Deliciosa mezcla de arroz frito con camarón, res y pollo, acompañada de topping de tampico, abanico de aguacate y bolitas de queso Philadelphia.", hasExtras:true, tags:["Popular"] },
+    { id:"p4", name:"Kung pao",                  price:170, desc:"Tiras de pollo bañadas en salsa agridulce picosa, con vegetales salteados, cacahuates, chile de árbol y elotes baby.", hasExtras:true, tags:["Picante"] },
+    { id:"p5", name:"Pechuga tokiyaki",          price:170, desc:"Pechuga de pollo en tiras (a la plancha o empanizada), bañada en aderezo cilantro, sobre vegetales salteados y arroz frito.", hasExtras:true, tags:[] },
+    { id:"p6", name:"Pechuga en crema chipotle", price:170, desc:"Tiras de pollo en crema chipotle, con vegetales salteados, sobre arroz frito.", hasExtras:true, tags:["Picante"] },
+    { id:"p7", name:"Chicken roll",              price:170, desc:"Pechuga de pollo rellena de camarón, tocino, pimientos y queso Philadelphia, calabaza, zanahoria, sobre arroz frito y ensalada de la casa.", hasExtras:true, tags:[] },
+    { id:"p8", name:"Gohan especial",            price:170, desc:"Base de arroz empanizado y gratinado, con vegetales salteados, camarón, res y pollo, coronado con abanico de aguacate, tampico y queso Philadelphia.", hasExtras:true, tags:["Popular"] },
   ],
   Entradas: [
-    { id:"e1", name:"Ensalada César",    price:135, desc:"Base de lechuga fresca con crotones, queso parmesano, orégano, pimienta y sal, con aderezo César de la casa, láminas de parmesano y un toque cítrico." },
-    { id:"e2", name:"Ensalada bonneles", price:150, desc:"Tiras de pollo bañadas en salsa a elegir, con lechuga fresca, pepino, zanahoria, tomate cherry, cebolla morada, rábano y vinagreta.", sauceOptions:"boneless" },
-    { id:"e3", name:"Ensalada light",    price:160, desc:"Pechuga de pollo a la plancha con lechuga, arúgula, espinaca, pepino, zanahoria, aceitunas, alcaparras, rábano y cebolla morada." },
+    { id:"e1", name:"Ensalada César",    price:135, desc:"Base de lechuga fresca con crotones, queso parmesano, orégano, pimienta y sal, con aderezo César de la casa, láminas de parmesano y un toque cítrico.", tags:["Individual"] },
+    { id:"e2", name:"Ensalada bonneles", price:150, desc:"Tiras de pollo bañadas en salsa a elegir, con lechuga fresca, pepino, zanahoria, tomate cherry, cebolla morada, rábano y vinagreta.", sauceOptions:"boneless", tags:["Picante"] },
+    { id:"e3", name:"Ensalada light",    price:160, desc:"Pechuga de pollo a la plancha con lechuga, arúgula, espinaca, pepino, zanahoria, aceitunas, alcaparras, rábano y cebolla morada.", tags:["Individual"] },
   ],
   Hamburguesas: [
-    { id:"h1", name:"Sencilla",           price:130, desc:"Carne a elección con queso americano. Incluye aderezo especial, tomate, lechuga, cebolla y papas.", hasBurgerProtein:true },
-    { id:"h2", name:"Doble",              price:155, desc:"2 pz de Res, queso americano, queso gratinado con tocino. Incluye aderezo especial, tomate, lechuga, cebolla y papas." },
-    { id:"h3", name:"Mushroom",           price:140, desc:"Carne a elección con queso americano, tocino, queso gratinado y champiñones salteados.", hasBurgerProtein:true },
-    { id:"h4", name:"Guacamole",          price:140, desc:"Carne a elección, tocino con queso americano y guacamole.", hasBurgerProtein:true },
-    { id:"h5", name:"Norteña",            price:175, desc:"Carne a elección con queso americano, piña y cebolla salteadas, chile verde tatemado, queso gratinado con tocino y salchicha.", hasBurgerProtein:true },
-    { id:"h6", name:"Bonneless",          price:140, desc:"Tiras de pollo bañadas en salsa de tu elección.", sauceOptions:"boneless" },
-    { id:"h7", name:"Cielo, Mar y Tierra",price:175, desc:"Carne de Res, Camarón y Pollo. Con queso americano." },
+    { id:"h1", name:"Sencilla",           price:130, desc:"Carne a elección con queso americano. Incluye aderezo especial, tomate, lechuga, cebolla y papas.", hasBurgerProtein:true, tags:["Individual"] },
+    { id:"h2", name:"Doble",              price:155, desc:"2 pz de Res, queso americano, queso gratinado con tocino. Incluye aderezo especial, tomate, lechuga, cebolla y papas.", tags:[] },
+    { id:"h3", name:"Mushroom",           price:140, desc:"Carne a elección con queso americano, tocino, queso gratinado y champiñones salteados.", hasBurgerProtein:true, tags:[] },
+    { id:"h4", name:"Guacamole",          price:140, desc:"Carne a elección, tocino con queso americano y guacamole.", hasBurgerProtein:true, tags:["Popular"] },
+    { id:"h5", name:"Norteña",            price:175, desc:"Carne a elección con queso americano, piña y cebolla salteadas, chile verde tatemado, queso gratinado con tocino y salchicha.", hasBurgerProtein:true, tags:["Popular","Picante"] },
+    { id:"h6", name:"Bonneless",          price:140, desc:"Tiras de pollo bañadas en salsa de tu elección.", sauceOptions:"boneless", tags:["Picante"] },
+    { id:"h7", name:"Cielo, Mar y Tierra",price:175, desc:"Carne de Res, Camarón y Pollo. Con queso americano.", tags:["Popular"] },
   ],
   Paquetes: [
-    { id:"pk1", name:"Paquete 1", price:225, desc:"1 rollo California + orden de boneless + 1 litro de té.", sauceOptions:"boneless" },
-    { id:"pk2", name:"Paquete 2", price:275, desc:"3 rollos California + 1 litro de té." },
-    { id:"pk3", name:"Paquete 3", price:305, desc:"2 rollos California + orden de boneless + 1 litro de té.", sauceOptions:"boneless" },
+    { id:"pk1", name:"Paquete 1", price:225, desc:"1 rollo California + orden de boneless + 1 litro de té.", sauceOptions:"boneless", tags:["Popular"] },
+    { id:"pk2", name:"Paquete 2", price:275, desc:"3 rollos California + 1 litro de té.", tags:[] },
+    { id:"pk3", name:"Paquete 3", price:305, desc:"2 rollos California + orden de boneless + 1 litro de té.", sauceOptions:"boneless", tags:[] },
   ],
   Bebidas: [
-    { id:"bv1", name:"Té Oolong 1 Litro", price:35, desc:"1 litro de té Oolong." },
-    { id:"bv2", name:"Refresco",           price:30, desc:"Familia Pepsi 600 ml." },
+    { id:"bv1", name:"Té Oolong 1 Litro", price:35, desc:"1 litro de té Oolong.", tags:[] },
+    { id:"bv2", name:"Refresco",           price:30, desc:"Familia Pepsi 600 ml.", tags:[] },
   ],
 };
+
+const ALL_TAGS = ["Picante","Popular","Individual"];
 
 const CAT_ICONS = {
   Botanas:"🍟", Sushi:"🍣", Platillos:"🍱", Entradas:"🥗",
   Hamburguesas:"🍔", Paquetes:"📦", Bebidas:"🧋"
 };
 
+// ── Generate turn number via Firestore atomic counter ────────────────
+// Uses /tenants/{id}/config/counters { turno: N } with FieldValue.increment
+// Returns a formatted string like "0623-007"
+async function fetchNextTurno(configDocRef) {
+  const counterRef = configDocRef("counters");
+  try {
+    await updateDoc(counterRef, { turno: increment(1) });
+  } catch (_) {
+    // Document doesn't exist yet — initialize it
+    await setDoc(counterRef, { turno: 1 }, { merge: true });
+  }
+  const snap = await getDoc(counterRef);
+  const n = snap.exists() ? (snap.data().turno ?? 1) : 1;
+  const now = new Date();
+  const mm = String(now.getMonth()+1).padStart(2,"0");
+  const dd = String(now.getDate()).padStart(2,"0");
+  return `${mm}${dd}-${String(n).padStart(3,"0")}`;
+}
+
 // ── Shared UI ────────────────────────────────────────────────────────
 const Chip = ({ label, active, onClick, danger, small }) => (
-  <button onClick={onClick} style={{
+  <button id={`chip-${label}`} onClick={onClick} style={{
     padding: small ? "3px 10px" : "5px 13px", borderRadius:20, cursor:"pointer",
     border:`1.5px solid ${active?(danger?"#c0392b":G.gold):G.divider}`,
     background: active?(danger?"#c0392b":G.gold):"transparent",
@@ -135,17 +157,121 @@ const Label = ({children}) => (
     textTransform:"uppercase",margin:"0 0 6px"}}>{children}</p>
 );
 
+// ── BannerCierre ─────────────────────────────────────────────────────
+function BannerCierre({ pausado }) {
+  const [visible, setVisible] = useState(true);
+  if (!visible) return null;
+  return (
+    <div style={{
+      position:"fixed", top:0, left:0, right:0, zIndex:500,
+      background: pausado
+        ? "linear-gradient(90deg,#7b0000,#c0392b)"
+        : "linear-gradient(90deg,#7a4f1e,#B8892A)",
+      borderBottom:`2px solid ${pausado?"#ff6b6b":G.goldLight}`,
+      padding:"10px 20px", maxWidth:640, margin:"0 auto",
+      display:"flex", alignItems:"center", gap:10,
+      boxShadow:"0 4px 20px rgba(0,0,0,.4)",
+      animation:"slideDown .35s ease"
+    }}>
+      <style>{`@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}`}</style>
+      <span style={{fontSize:20}}>{pausado ? "🚨" : "🕐"}</span>
+      <div style={{flex:1}}>
+        <p style={{color:"#fff",fontWeight:900,fontSize:13,margin:0}}>
+          {pausado ? "Cocina en pausa — No se aceptan pedidos en este momento" : "Establecimiento cerrado"}
+        </p>
+        <p style={{color:"rgba(255,255,255,.8)",fontSize:11,margin:0}}>
+          Horario de atención: 12:00 PM a 11:30 PM
+        </p>
+      </div>
+      <button onClick={()=>setVisible(false)} style={{
+        background:"none", border:"none", color:"rgba(255,255,255,.7)",
+        fontSize:18, cursor:"pointer", padding:0
+      }}>✕</button>
+    </div>
+  );
+}
+
+// ── SearchBar ────────────────────────────────────────────────────────
+function SearchBar({ value, onChange }) {
+  return (
+    <div style={{padding:"10px 16px 6px", background:G.warmGray}}>
+      <div style={{position:"relative"}}>
+        <span style={{
+          position:"absolute", left:12, top:"50%", transform:"translateY(-50%)",
+          fontSize:14, color:G.textSub, pointerEvents:"none"
+        }}>🔍</span>
+        <input
+          id="search-menu"
+          type="text"
+          value={value}
+          onChange={e=>onChange(e.target.value)}
+          placeholder="Buscar platillo..."
+          style={{
+            width:"100%", boxSizing:"border-box",
+            padding:"9px 12px 9px 36px",
+            border:`1.5px solid ${G.divider}`, borderRadius:10,
+            fontSize:13, fontFamily:"inherit",
+            background:"#fff", color:G.textMain, outline:"none",
+            transition:"border-color .15s"
+          }}
+          onFocus={e=>{ e.target.style.borderColor=G.gold; }}
+          onBlur={e=>{ e.target.style.borderColor=G.divider; }}
+        />
+        {value && (
+          <button onClick={()=>onChange("")} style={{
+            position:"absolute", right:10, top:"50%", transform:"translateY(-50%)",
+            background:"none", border:"none", cursor:"pointer",
+            color:G.textSub, fontSize:16, padding:0, lineHeight:1
+          }}>✕</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── TagPills ─────────────────────────────────────────────────────────
+function TagPills({ active, onChange }) {
+  return (
+    <div style={{
+      display:"flex", gap:6, padding:"6px 16px 10px",
+      background:G.warmGray, overflowX:"auto", scrollbarWidth:"none"
+    }}>
+      {ALL_TAGS.map(tag => {
+        const icons = { Picante:"🌶", Popular:"⭐", Individual:"👤" };
+        const isActive = active.includes(tag);
+        return (
+          <button
+            key={tag}
+            id={`tag-pill-${tag}`}
+            onClick={() => onChange(isActive ? active.filter(t=>t!==tag) : [...active,tag])}
+            style={{
+              padding:"4px 12px", borderRadius:20, cursor:"pointer",
+              border:`1.5px solid ${isActive ? G.gold : G.divider}`,
+              background: isActive ? G.gold : "#fff",
+              color: isActive ? G.dark : G.textSub,
+              fontSize:12, fontWeight:700, whiteSpace:"nowrap",
+              transition:"all .15s"
+            }}
+          >
+            {icons[tag]} {tag}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── MenuItem ─────────────────────────────────────────────────────────
-function MenuItem({ item, onAdd }) {
+function MenuItem({ item, onAdd, disabled }) {
   const [open,    setOpen]    = useState(false);
   const [protein, setProtein] = useState(null);
   const [sauce,   setSauce]   = useState(null);
   const [bomba,   setBomba]   = useState(false);
-  const [extras,  setExtras]  = useState([]); // sushi extras: Philadelphia, Gratinado
-  const [platExtras, setPlatExtras] = useState([]); // platillo protein extras
+  const [extras,  setExtras]  = useState([]);
+  const [platExtras, setPlatExtras] = useState([]);
   const [note,    setNote]    = useState("");
   const [qty,     setQty]     = useState(1);
-  const [alga, setAlga] = useState(false); // true = con alga (default)
+  const [alga, setAlga] = useState(true);
 
   const toggleSushiExtra = (e) =>
     setExtras(prev => prev.includes(e) ? prev.filter(x=>x!==e) : [...prev,e]);
@@ -160,6 +286,7 @@ function MenuItem({ item, onAdd }) {
   const total = price * qty;
 
   const doAdd = () => {
+    if (disabled) return;
     if (item.hasProtein && !protein)       { alert("Elige una proteína."); return; }
     if (item.hasBurgerProtein && !protein) { alert("Elige la carne de tu hamburguesa."); return; }
     if (item.sauceOptions && !sauce)       { alert("Elige una salsa."); return; }
@@ -178,31 +305,52 @@ function MenuItem({ item, onAdd }) {
       border:`1px solid ${open?G.gold:G.divider}`,
       marginBottom:8, overflow:"hidden",
       boxShadow:open?`0 2px 12px ${G.gold}22`:"0 1px 3px #0001",
-      transition:"border-color .2s, box-shadow .2s"
+      transition:"border-color .2s, box-shadow .2s",
+      opacity: disabled ? 0.55 : 1
     }}>
       <div style={{display:"flex",alignItems:"flex-start",padding:"13px 14px",gap:10}}>
         <div style={{flex:1}}>
           <p style={{color:G.gold,fontWeight:800,fontSize:14.5,margin:"0 0 3px",
             fontFamily:"Georgia,serif"}}>{item.name}</p>
           <p style={{color:G.textSub,fontSize:12,margin:0,lineHeight:1.45}}>{item.desc}</p>
+          {item.tags?.length > 0 && (
+            <div style={{display:"flex",gap:4,marginTop:5,flexWrap:"wrap"}}>
+              {item.tags.map(t => {
+                const colors = { Picante:"#e74c3c", Popular:"#B8892A", Individual:"#2980b9" };
+                const icons  = { Picante:"🌶", Popular:"⭐", Individual:"👤" };
+                return (
+                  <span key={t} style={{
+                    background:`${colors[t]}18`,color:colors[t],
+                    borderRadius:10,padding:"1px 7px",fontSize:10,fontWeight:800,
+                    border:`1px solid ${colors[t]}33`
+                  }}>{icons[t]} {t}</span>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,minWidth:66}}>
           <p style={{color:G.dark,fontWeight:900,fontSize:15.5,margin:0,
             fontFamily:"Georgia,serif"}}>${item.price}</p>
-          <button onClick={()=>setOpen(!open)} style={{
-            padding:"5px 13px",borderRadius:8,
-            border:`1.5px solid ${G.gold}`,
-            background:open?G.gold:"transparent",
-            color:open?G.dark:G.gold,
-            fontSize:12,fontWeight:800,cursor:"pointer"
-          }}>{open?"Cerrar":"+ Pedir"}</button>
+          <button
+            id={`add-${item.id}`}
+            disabled={disabled}
+            onClick={()=>!disabled && setOpen(!open)}
+            style={{
+              padding:"5px 13px",borderRadius:8,
+              border:`1.5px solid ${G.gold}`,
+              background:open?G.gold:"transparent",
+              color:open?G.dark:G.gold,
+              fontSize:12,fontWeight:800,
+              cursor:disabled?"not-allowed":"pointer",
+              opacity: disabled ? 0.5 : 1
+            }}>{open?"Cerrar":"+ Pedir"}</button>
         </div>
       </div>
 
       {open && (
         <div style={{padding:"0 14px 14px",borderTop:`1px solid ${G.divider}`}}>
 
-          {/* Proteína — sushi o burger */}
           {proteins.length>0 && (
             <div style={{marginTop:12}}>
               <Label>{item.hasBurgerProtein?"Carne":"Proteína"}</Label>
@@ -214,7 +362,6 @@ function MenuItem({ item, onAdd }) {
             </div>
           )}
 
-          {/* Salsa */}
           {item.sauceOptions && (
             <div style={{marginTop:12}}>
               <Label>Salsa</Label>
@@ -226,7 +373,6 @@ function MenuItem({ item, onAdd }) {
             </div>
           )}
 
-          {/* Sushi extras */}
           {item.isSushi && (
             <div style={{marginTop:12}}>
               <Label>Ingredientes extra (+${EXTRA_SUSHI} c/u)</Label>
@@ -235,7 +381,6 @@ function MenuItem({ item, onAdd }) {
                   <Chip key={e} label={e} active={extras.includes(e)}
                     onClick={()=>toggleSushiExtra(e)} small />
                 ))}
-                {/* Con / Sin alga */}
                 <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
                   <Label>Alga</Label>
                   <div style={{display:"flex",gap:6}}>
@@ -244,7 +389,6 @@ function MenuItem({ item, onAdd }) {
                   </div>
                 </div>
               </div>
-              {/* Bomba */}
               <div style={{marginTop:8}}>
                 <Chip label={`💣 Convertir en Bomba +$${BOMBA_PRICE}`}
                   active={bomba} onClick={()=>setBomba(!bomba)} danger />
@@ -254,7 +398,6 @@ function MenuItem({ item, onAdd }) {
             </div>
           )}
 
-          {/* Platillo extras */}
           {item.hasExtras && (
             <div style={{marginTop:12,background:"#fff8ee",borderRadius:8,padding:"10px 12px",
               border:`1px solid ${G.divider}`}}>
@@ -273,7 +416,6 @@ function MenuItem({ item, onAdd }) {
             </div>
           )}
 
-          {/* Nota */}
           <div style={{marginTop:12}}>
             <Label>Nota especial</Label>
             <textarea value={note} onChange={e=>setNote(e.target.value)}
@@ -283,7 +425,6 @@ function MenuItem({ item, onAdd }) {
                 resize:"none",boxSizing:"border-box",fontFamily:"inherit"}} />
           </div>
 
-          {/* Qty + Total + Add */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <button onClick={()=>setQty(Math.max(1,qty-1))} style={qBtn}>−</button>
@@ -295,9 +436,11 @@ function MenuItem({ item, onAdd }) {
               <p style={{color:G.gold,fontWeight:900,fontSize:17,margin:0,
                 fontFamily:"Georgia,serif"}}>${total}</p>
             </div>
-            <button onClick={doAdd} style={{
+            <button id={`confirm-add-${item.id}`} onClick={doAdd} disabled={disabled} style={{
               padding:"9px 18px",borderRadius:9,border:"none",
-              background:G.gold,color:G.dark,fontWeight:900,fontSize:13,cursor:"pointer"
+              background:G.gold,color:G.dark,fontWeight:900,fontSize:13,
+              cursor:disabled?"not-allowed":"pointer",
+              opacity:disabled?0.5:1
             }}>✓ Agregar</button>
           </div>
         </div>
@@ -326,7 +469,7 @@ function CartBar({ count, total, onClick }) {
         <p style={{color:G.goldLight,fontWeight:900,fontSize:19,margin:0,
           fontFamily:"Georgia,serif"}}>${total}</p>
       </div>
-      <button onClick={onClick} style={{
+      <button id="btn-ver-pedido" onClick={onClick} style={{
         background:G.gold,border:"none",borderRadius:11,
         color:G.dark,fontWeight:900,fontSize:14,
         padding:"10px 22px",cursor:"pointer"}}>Ver pedido →</button>
@@ -358,7 +501,8 @@ function SummaryRow({ label, value }) {
 }
 
 // ── OrderModal ───────────────────────────────────────────────────────
-function OrderModal({ items, onClose, onSend, onRemove }) {
+function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
+  const { configDocRef } = useTenant();
   const [name,     setName]     = useState("");
   const [phone,    setPhone]    = useState("");
   const [delivery, setDelivery] = useState(null);
@@ -367,14 +511,14 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
   const [step,     setStep]     = useState(1);
   const [sending,  setSending]  = useState(false);
   const [deliveryCost, setDeliveryCost] = useState(30);
+  const [confirmedTurno, setConfirmedTurno] = useState(null);
 
-  // Load delivery cost from Firebase config
-  useState(()=>{
-    getDoc(doc(db,"config","general")).then(d=>{
+  useEffect(()=>{
+    getDoc(configDocRef("general")).then(d=>{
       if(d.exists() && d.data().deliveryCost!=null)
         setDeliveryCost(d.data().deliveryCost);
     }).catch(()=>{});
-  });
+  },[]);// eslint-disable-line react-hooks/exhaustive-deps
 
   const subtotal = items.reduce((s,i)=>s+i.totalPrice,0);
   const total    = subtotal + (delivery==="domicilio" ? deliveryCost : 0);
@@ -382,7 +526,46 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
                    (delivery==="recoger" || address.trim()) && payment;
   const STEPS    = ["Pedido","Datos","Confirmar"];
 
-  const doSend = (mode) => onSend({ name, phone, delivery, address, payment, deliveryCost, total }, setSending, mode);
+  const doSend = (mode) => onSend(
+    { name, phone, delivery, address, payment, deliveryCost, total },
+    setSending, mode, setConfirmedTurno
+  );
+
+  if (confirmedTurno) {
+    return (
+      <div style={{position:"fixed",inset:0,background:"rgba(28,18,8,.92)",
+        zIndex:300,display:"flex",flexDirection:"column",
+        alignItems:"center",justifyContent:"center"}}>
+        <div style={{
+          background:G.offWhite, borderRadius:20,
+          padding:"40px 32px", textAlign:"center",
+          border:`3px solid ${G.gold}`, maxWidth:320,
+          animation:"popIn .4s cubic-bezier(.175,.885,.32,1.275)"
+        }}>
+          <style>{`@keyframes popIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}`}</style>
+          <p style={{fontSize:48,margin:"0 0 8px"}}>✅</p>
+          <p style={{color:G.gold,fontFamily:"Georgia,serif",fontSize:22,fontWeight:900,margin:"0 0 4px"}}>
+            ¡Pedido recibido!
+          </p>
+          <p style={{color:G.textSub,fontSize:13,margin:"0 0 20px"}}>Tu número de turno es:</p>
+          <div style={{
+            background:G.dark,borderRadius:12,padding:"16px 24px",
+            border:`2px solid ${G.gold}`, marginBottom:20
+          }}>
+            <p style={{color:"#aaa",fontSize:11,margin:"0 0 4px",letterSpacing:2}}>TURNO</p>
+            <p style={{color:G.goldLight,fontFamily:"Georgia,serif",
+              fontSize:36,fontWeight:900,margin:0,letterSpacing:4}}>
+              #{confirmedTurno}
+            </p>
+          </div>
+          <button onClick={onClose} style={{
+            width:"100%",padding:"13px",borderRadius:10,border:"none",
+            background:G.gold,color:G.dark,fontWeight:900,fontSize:15,cursor:"pointer"
+          }}>Cerrar</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(28,18,8,.82)",
@@ -393,7 +576,6 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
         width:"100%",maxWidth:640,maxHeight:"90vh",
         display:"flex",flexDirection:"column",borderTop:`3px solid ${G.gold}`}}>
 
-        {/* Header */}
         <div style={{padding:"16px 20px 12px",borderBottom:`1px solid ${G.divider}`,
           display:"flex",alignItems:"center",gap:12}}>
           <span style={{fontFamily:"Georgia,serif",color:G.gold,fontSize:13,fontWeight:700}}>
@@ -416,7 +598,6 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
 
         <div style={{overflowY:"auto",padding:"16px 20px",flex:1}}>
 
-          {/* STEP 1 — Items + remove */}
           {step===1 && (
             <>
               <h3 style={{color:G.dark,fontFamily:"Georgia,serif",marginTop:0}}>Tu pedido</h3>
@@ -431,8 +612,7 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
                       {item.bomba&&<span style={{color:"#c0392b",fontSize:10,marginLeft:4}}>💣BOMBA</span>}
                     </p>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <p style={{color:G.dark,fontWeight:900,margin:0,
-                        fontFamily:"Georgia,serif"}}>${item.totalPrice}</p>
+                      <p style={{color:G.dark,fontWeight:900,margin:0,fontFamily:"Georgia,serif"}}>${item.totalPrice}</p>
                       <button onClick={()=>onRemove(i)} style={{
                         background:"#fee",border:"1px solid #f88",borderRadius:6,
                         color:"#c0392b",fontSize:12,padding:"2px 7px",cursor:"pointer",fontWeight:700
@@ -456,11 +636,10 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
                 <p style={{color:G.gold,fontWeight:900,fontSize:20,margin:0,
                   fontFamily:"Georgia,serif"}}>${subtotal}</p>
               </div>
-              <button onClick={()=>setStep(2)} style={nextBtn}>Continuar →</button>
+              <button id="btn-continuar-datos" onClick={()=>setStep(2)} style={nextBtn}>Continuar →</button>
             </>
           )}
 
-          {/* STEP 2 — Datos */}
           {step===2 && (
             <>
               <h3 style={{color:G.dark,fontFamily:"Georgia,serif",marginTop:0}}>Tus datos</h3>
@@ -473,7 +652,7 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
                   {val:"recoger",icon:"🏪",label:"Recoger en restaurante"},
                   {val:"domicilio",icon:"🛵",label:"Entrega a domicilio"},
                 ].map(o=>(
-                  <button key={o.val} onClick={()=>setDelivery(o.val)} style={{
+                  <button key={o.val} id={`delivery-${o.val}`} onClick={()=>setDelivery(o.val)} style={{
                     flex:1,padding:"12px 8px",borderRadius:10,cursor:"pointer",
                     border:`2px solid ${delivery===o.val?G.gold:G.divider}`,
                     background:delivery===o.val?`${G.gold}18`:G.cardBg,
@@ -498,7 +677,7 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
                   {val:"transferencia",icon:"📲",label:"Transferencia",sub:"Te enviamos los datos por WhatsApp"},
                   {val:"terminal",icon:"💳",label:"Terminal bancaria",sub:"Débito o crédito al recoger / en puerta"},
                 ].map(o=>(
-                  <button key={o.val} onClick={()=>setPayment(o.val)} style={{
+                  <button key={o.val} id={`payment-${o.val}`} onClick={()=>setPayment(o.val)} style={{
                     display:"flex",alignItems:"center",gap:12,
                     padding:"11px 14px",borderRadius:10,cursor:"pointer",
                     border:`2px solid ${payment===o.val?G.gold:G.divider}`,
@@ -518,14 +697,14 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
                   </button>
                 ))}
               </div>
-              <button onClick={()=>{if(canNext2)setStep(3);else alert("Completa todos los campos.");}}
+              <button id="btn-revisar-pedido"
+                onClick={()=>{if(canNext2)setStep(3);else alert("Completa todos los campos.");}}
                 style={{...nextBtn,marginTop:20,opacity:canNext2?1:.5}}>
                 Revisar pedido →
               </button>
             </>
           )}
 
-          {/* STEP 3 — Confirmar */}
           {step===3 && (
             <>
               <h3 style={{color:G.dark,fontFamily:"Georgia,serif",marginTop:0}}>Confirmar pedido</h3>
@@ -561,20 +740,21 @@ function OrderModal({ items, onClose, onSend, onRemove }) {
                   fontFamily:"Georgia,serif"}}>${total}</p>
               </div>
 
-              {/* TWO ACTION BUTTONS */}
-              <button onClick={()=>doSend("whatsapp")} disabled={sending} style={{
-                ...nextBtn,background:G.green,marginTop:20,
-                display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-                opacity:sending?.7:1}}>
+              <button id="btn-send-whatsapp"
+                onClick={()=>!disabled&&doSend("whatsapp")} disabled={sending||disabled} style={{
+                  ...nextBtn,background:G.green,marginTop:20,
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+                  opacity:(sending||disabled)?.7:1}}>
                 {sending?"Enviando...":(<><span style={{fontSize:18}}>💬</span> Enviar por WhatsApp</>)}
               </button>
-              <button onClick={()=>doSend("only")} disabled={sending} style={{
-                ...nextBtn,background:G.goldBg,marginTop:8,
-                display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-                opacity:sending?.7:1}}>
+              <button id="btn-send-only"
+                onClick={()=>!disabled&&doSend("only")} disabled={sending||disabled} style={{
+                  ...nextBtn,background:G.goldBg,marginTop:8,
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+                  opacity:(sending||disabled)?.7:1}}>
                 {sending?"Registrando...":(<><span style={{fontSize:16}}>✅</span> Solo registrar pedido</>)}
               </button>
-              <button onClick={()=>setStep(2)} style={{
+              <button id="btn-back-datos" onClick={()=>setStep(2)} style={{
                 width:"100%",marginTop:8,padding:"10px",borderRadius:9,
                 border:`1.5px solid ${G.divider}`,background:"transparent",
                 color:G.textSub,fontWeight:700,fontSize:13,cursor:"pointer"}}>
@@ -593,19 +773,96 @@ const nextBtn = {
 };
 
 // ── App ──────────────────────────────────────────────────────────────
-export default function App() {
+function App() {
+  const { tenantId, colRef, configDocRef, pausado, horario, unlockAudio, playAddToCart, playOrderConfirmed } = useTenant();
+  const isClosed = useIsClosedHours(horario);
+  const isDisabled = isClosed || pausado;
+
   const [cat,       setCat]       = useState("Botanas");
   const [cart,      setCart]      = useState([]);
   const [showModal, setShowModal] = useState(false);
-  const categories = Object.keys(MENU);
+  const [search,    setSearch]    = useState("");
+  const [activeTags,setActiveTags]= useState([]);
+  const [menu,      setMenu]      = useState(MENU_STATIC);
+  const audioUnlockedRef = useRef(false);
+
+  const categories = Object.keys(menu);
   const cartCount  = cart.reduce((s,i)=>s+i.qty,0);
   const cartTotal  = cart.reduce((s,i)=>s+i.totalPrice,0);
 
-  const addToCart    = item => setCart(prev=>[...prev,item]);
-  const removeFromCart = idx => setCart(prev=>prev.filter((_,i)=>i!==idx));
+  // Unlock audio on first interaction
+  const handleFirstInteraction = useCallback(() => {
+    if (!audioUnlockedRef.current) {
+      unlockAudio();
+      audioUnlockedRef.current = true;
+    }
+  }, [unlockAudio]);
 
-  const buildMsg = ({ name, phone, delivery, address, payment, deliveryCost, total }) => {
+  useEffect(() => {
+    window.addEventListener("touchstart", handleFirstInteraction, { once:true });
+    window.addEventListener("click",      handleFirstInteraction, { once:true });
+    return () => {
+      window.removeEventListener("touchstart", handleFirstInteraction);
+      window.removeEventListener("click",      handleFirstInteraction);
+    };
+  }, [handleFirstInteraction]);
+
+  // Load menu from Firestore with 3s timeout fallback
+  useEffect(() => {
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        console.info("[Shekinah] Firestore timeout — usando menú estático.");
+        settled = true;
+      }
+    }, 3000);
+
+    let unsub = () => {};
+    try {
+      unsub = onSnapshot(
+        colRef("productos"),
+        (snap) => {
+          clearTimeout(timeout);
+          settled = true;
+          if (snap.empty) return; // keep static fallback if collection empty
+          // Group by categoria
+          const grouped = {};
+          snap.docs.forEach(d => {
+            const data = d.data();
+            const cat  = data.categoria || "Otros";
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push({ id: d.id, ...data });
+          });
+          if (Object.keys(grouped).length > 0) setMenu(grouped);
+        },
+        () => {
+          clearTimeout(timeout);
+          // silently fallback
+        }
+      );
+    } catch (_) {
+      clearTimeout(timeout);
+    }
+    return () => { unsub(); clearTimeout(timeout); };
+  }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addToCart = item => {
+    playAddToCart();
+    setCart(prev => [...prev, item]);
+  };
+  const removeFromCart = idx => setCart(prev => prev.filter((_,i)=>i!==idx));
+
+  // Filter items
+  const filteredItems = (menu[cat] || []).filter(item => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || item.name.toLowerCase().includes(q) || (item.desc||"").toLowerCase().includes(q);
+    const matchTags = activeTags.length === 0 || activeTags.every(t => (item.tags||[]).includes(t));
+    return matchSearch && matchTags;
+  });
+
+  const buildMsg = ({ name, phone, delivery, address, payment, deliveryCost, total, turno }) => {
     let msg = `🔥 *NUEVO PEDIDO — SHEKINAH*\n`;
+    msg += `🎫 *Turno: #${turno}*\n`;
     msg += `👤 *Cliente:* ${name}\n`;
     msg += `📱 *Teléfono:* ${phone}\n`;
     msg += delivery==="recoger"?`🏪 *Entrega:* Pasa a recoger\n`:`🛵 *Entrega:* Domicilio — ${address}\n`;
@@ -621,47 +878,62 @@ export default function App() {
       if(item.extras?.length) msg+=`   • Extras: ${item.extras.join(", ")}\n`;
       if(item.platExtras?.length) msg+=`   • Proteína extra: ${item.platExtras.join(", ")}\n`;
       if(item.alga !== null && item.alga !== undefined)
-      msg += `   • Alga: ${item.alga ? "Con alga" : "Sin alga"}\n`;
-      if(item.note)    msg+=`   • Nota: ${item.note}\n`;
+        msg += `   • Alga: ${item.alga ? "Con alga" : "Sin alga"}\n`;
+      if(item.note) msg+=`   • Nota: ${item.note}\n`;
     });
     if(delivery==="domicilio") msg+=`\n🛵 Envío: $${deliveryCost}\n`;
     msg += `\n━━━━━━━━━━━━━━━━━━━━\n💰 *TOTAL: $${total} MXN*\n\n¡Gracias! 🙏`;
     return encodeURIComponent(msg);
   };
 
-  const handleSend = async ({ name, phone, delivery, address, payment, deliveryCost, total }, setSending, mode) => {
+  const handleSend = async ({ name, phone, delivery, address, payment, deliveryCost, total }, setSending, mode, setConfirmedTurno) => {
+    if (isDisabled) return;
     setSending(true);
+    const turno = await fetchNextTurno(configDocRef);
     try {
-      await addDoc(collection(db,"pedidos"),{
+      await addDoc(colRef("pedidos"), {
         nombre: name, telefono: phone, entrega: delivery,
         direccion: address||"", pago: payment,
         costoEnvio: delivery==="domicilio"?deliveryCost:0,
         articulos: cart.map(i=>({
-          nombre:i.name, cantidad:i.qty, proteina:i.protein||"",
+          nombre:i.name, cantidad:i.qty, protein:i.protein||"",
           salsa:i.sauce||"", bomba:i.bomba||false,
           extras:i.extras||[], platExtras:i.platExtras||[],
           nota:i.note||"", subtotal:i.totalPrice,
           alga: i.alga ?? null,
         })),
-        total, estado:"nuevo", origen:"web", creadoEn:serverTimestamp(),
+        total, estado:"nuevo", origen:"web",
+        creadoEn:serverTimestamp(), turno,
+        tenantId,
       });
     } catch(e){ console.error(e); }
 
+    playOrderConfirmed();
+    setConfirmedTurno(turno);
+
     if(mode==="whatsapp"){
-      window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${buildMsg({name,phone,delivery,address,payment,deliveryCost,total})}`,"_blank");
+      window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${buildMsg({name,phone,delivery,address,payment,deliveryCost,total,turno})}`,"_blank");
     }
     setSending(false);
-    setShowModal(false);
     setCart([]);
   };
 
   return (
-    <div style={{background:G.offWhite,minHeight:"100vh",
-      fontFamily:"'Segoe UI',system-ui,sans-serif",maxWidth:640,margin:"0 auto"}}>
+    <div
+      onClick={handleFirstInteraction}
+      style={{background:G.offWhite,minHeight:"100vh",
+        fontFamily:"'Segoe UI',system-ui,sans-serif",maxWidth:640,margin:"0 auto"}}>
+
+      {isDisabled && <BannerCierre pausado={pausado} />}
 
       {/* Header */}
-      <div style={{background:G.dark,padding:"18px 20px 14px",
-        borderBottom:`3px solid ${G.gold}`,position:"sticky",top:0,zIndex:150}}>
+      <div style={{
+        background:G.dark,padding:"18px 20px 14px",
+        borderBottom:`3px solid ${G.gold}`,
+        position:"sticky",top:0,zIndex:150,
+        marginTop: isDisabled ? 64 : 0,
+        transition:"margin-top .3s"
+      }}>
         <div style={{display:"flex",alignItems:"center"}}>
           <div>
             <p style={{color:G.gold,fontFamily:"Georgia,serif",
@@ -670,7 +942,7 @@ export default function App() {
               letterSpacing:3,fontWeight:600}}>RESTAURANT · EL SABOR A GLORIA</p>
           </div>
           {cartCount>0&&(
-            <button onClick={()=>setShowModal(true)} style={{
+            <button id="btn-header-carrito" onClick={()=>setShowModal(true)} style={{
               marginLeft:"auto",background:G.gold,border:"none",borderRadius:10,
               padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:7}}>
               <span style={{fontSize:13}}>🛒</span>
@@ -693,7 +965,7 @@ export default function App() {
         background:G.warmGray,borderBottom:`2px solid ${G.divider}`,
         scrollbarWidth:"none",padding:"0 4px"}}>
         {categories.map(c=>(
-          <button key={c} onClick={()=>setCat(c)} style={{
+          <button key={c} id={`tab-${c}`} onClick={()=>{setCat(c);setSearch("");setActiveTags([]);}} style={{
             padding:"11px 14px",border:"none",
             borderBottom:`3px solid ${cat===c?G.gold:"transparent"}`,
             background:"transparent",color:cat===c?G.gold:G.textSub,
@@ -701,6 +973,10 @@ export default function App() {
           }}>{CAT_ICONS[c]} {c}</button>
         ))}
       </div>
+
+      {/* Search + Tag pills */}
+      <SearchBar value={search} onChange={setSearch} />
+      <TagPills active={activeTags} onChange={setActiveTags} />
 
       {/* Menu */}
       <div style={{padding:"16px",paddingBottom:cartCount?100:24}}>
@@ -717,8 +993,14 @@ export default function App() {
             </p>
           </div>
         )}
-        {MENU[cat].map(item=>(
-          <MenuItem key={item.id} item={item} onAdd={addToCart} />
+        {filteredItems.length === 0 && (
+          <div style={{textAlign:"center",padding:"40px 20px"}}>
+            <p style={{fontSize:32,margin:"0 0 8px"}}>🔍</p>
+            <p style={{color:G.textSub,fontSize:14}}>Sin resultados para "{search}"</p>
+          </div>
+        )}
+        {filteredItems.map(item=>(
+          <MenuItem key={item.id} item={item} onAdd={addToCart} disabled={isDisabled} />
         ))}
       </div>
 
@@ -726,7 +1008,7 @@ export default function App() {
 
       {showModal&&(
         <OrderModal items={cart} onClose={()=>setShowModal(false)}
-          onSend={handleSend} onRemove={removeFromCart} />
+          onSend={handleSend} onRemove={removeFromCart} disabled={isDisabled} />
       )}
     </div>
   );
