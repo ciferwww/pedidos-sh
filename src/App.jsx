@@ -35,7 +35,6 @@ const BOMBA_PRICE     = 165;
 const EXTRA_SUSHI     = 20;
 const EXTRA_PLAT      = 30;
 const SUSHI_EXTRAS    = ["Philadelphia","Gratinado"];
-const [trackingOrderId, setTrackingOrderId] = useState(localStorage.getItem("trackingOrderId"));
 
 // menu statico por si no hay firestore
 const MENU_STATIC = {
@@ -850,7 +849,7 @@ function App() {
   const [activeTags,setActiveTags]= useState([]);
   const [menu,      setMenu]      = useState(MENU_STATIC);
   const audioUnlockedRef = useRef(false);
-
+  const [trackingOrderId, setTrackingOrderId] = useState(localStorage.getItem("trackingOrderId"));
   const categories = Object.keys(menu);
   const cartCount  = cart.reduce((s,i)=>s+i.qty,0);
   const cartTotal  = cart.reduce((s,i)=>s+i.totalPrice,0);
