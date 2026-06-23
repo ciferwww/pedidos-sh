@@ -3,7 +3,7 @@ import {  addDoc, serverTimestamp, getDoc, onSnapshot, doc, collection} from "fi
 import { useTenant, useIsClosedHours, TenantProvider } from "./TenantContext";
 
 
-// ─── Re-exportamos app envuelto en TenantProvider ────────────────────
+// 
 
 const buildMsg = (data) => {
   return encodeURIComponent(`¡Hola! Mi pedido es el #${data.turno}. ID de rastreo: ${data.orderId}`); };
@@ -956,24 +956,24 @@ function App() {
     setSending(true);
     const turno = generateTurno();
     try {
-  const docRef = await addDoc(colRef("pedidos"), {
+
+
+      const orderId = (await addDoc(colRef("pedidos"), {
         nombre: name, telefono: phone, entrega: delivery,
-        direccion: address||"", pago: payment,
-        costoEnvio: delivery==="domicilio"?deliveryCost:0,
-        articulos: cart.map(i=>({
-          nombre:i.name, cantidad:i.qty, protein:i.protein||"",
-          salsa:i.sauce||"", bomba:i.bomba||false,
-          extras:i.extras||[], platExtras:i.platExtras||[],
-          nota:i.note||"", subtotal:i.totalPrice,
+        direccion: address || "", pago: payment,
+        costoEnvio: delivery === "domicilio" ? deliveryCost : 0,
+        articulos: cart.map(i => ({
+          nombre: i.name, cantidad: i.qty, protein: i.protein || "",
+          salsa: i.sauce || "", bomba: i.bomba || false,
+          extras: i.extras || [], platExtras: i.platExtras || [],
+          nota: i.note || "", subtotal: i.totalPrice,
           alga: i.alga ?? null,
           preparacion: i.prep || ""
         })),
-        total, estado:"nuevo", origen:"web",
-        creadoEn:serverTimestamp(), turno,
+        total, estado: "nuevo", origen: "web",
+        creadoEn: serverTimestamp(), turno,
         tenantId,
-      });
-
-      const orderId = docRef.id;
+      })).id;
       localStorage.setItem("trackingOrderId", orderId);
       setTrackingOrderId(orderId);
       setCart([]);          
