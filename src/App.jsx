@@ -945,7 +945,7 @@ function App() {
       if(item.note) msg+=`   • Nota: ${item.note}\n`;
     });
     if(delivery==="domicilio") msg+=`\n🛵 Envío: $${deliveryCost}\n`;
-    msg += `\n━━━━━━━━━━━━━━━━━━━━\n💰 *TOTAL: ${total} MXN*\n\n📍 Sigue tu pedido en vivo aquí:\n${window.location.origin}/?rest=${resolveTenantId()}&track=${orderId}\n\n¡Gracias! 🙏`;
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n💰 *TOTAL: ${total} MXN*\n\n📍 Sigue tu pedido en vivo aquí:\n${window.location.origin}/?rest=${tenantId}&track=${orderId}\n\n¡Gracias! 🙏`;
     return encodeURIComponent(msg);
   };
 
