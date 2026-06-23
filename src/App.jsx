@@ -477,19 +477,42 @@ function CartBar({ count, total, onClick }) {
 
 // ── OrderTracker ───────────────────────────────────────────────────────
 function OrderTracker({ orderId, onClose }) {
-  
+
   const { db, tenantId } = useTenant();
   const [pedido, setPedido] = useState(null);
-  
+  const [notFound, setNotFound] = useState(false);
+
   useEffect(() => {
     if (!orderId || !tenantId || !db) return;
+    setPedido(null);
+    setNotFound(false);
 
-    // CORRECCIÓN: Usamos el 'tenantId' del contexto en la ruta
-    const unsub = onSnapshot(doc(db, "tenants", tenantId, "pedidos", orderId), (snap) => {
-      if(snap.exists()) setPedido({id:snap.id, ...snap.data()});
-    });
+    const unsub = onSnapshot(
+      doc(db, "tenants", tenantId, "pedidos", orderId),
+      (snap) => {
+        if (snap.exists()) setPedido({ id: snap.id, ...snap.data() });
+        else setNotFound(true);
+      },
+      () => setNotFound(true)
+    );
     return unsub;
-  }, [orderId, tenantId, db]); // Agregamos las dependencias correctas
+  }, [orderId, tenantId, db]);
+
+  if (notFound) {
+    return (
+      <div style={{padding:40,textAlign:"center"}}>
+        <p style={{color:G.textSub,fontSize:15,marginBottom:18}}>
+          No encontramos este pedido. Puede que el link haya caducado.
+        </p>
+        {onClose && (
+          <button onClick={onClose} style={{padding:"12px 24px",borderRadius:12,border:"none",
+            background:G.gold,color:G.dark,fontWeight:900,fontSize:15,cursor:"pointer"}}>
+            Ir al Menú
+          </button>
+        )}
+      </div>
+    );
+  }
 
   if(!pedido) return <div style={{padding:40,textAlign:"center",color:G.textSub}}>Cargando estado...</div>;
 
@@ -500,8 +523,9 @@ function OrderTracker({ orderId, onClose }) {
     {key:"listo", label:pedido.entrega==="domicilio"?"En Camino":"Listo para recoger", icon:pedido.entrega==="domicilio"?"🛵":"🏪"},
     {key:"entregado", label:"Entregado", icon:"✅"}
   ];
-  
+
   const currentIdx = stages.findIndex(s=>s.key===est);
+  const isDone = est === "entregado";
 
   return (
     <div style={{background:G.offWhite,minHeight:"100vh",padding:20,maxWidth:640,margin:"0 auto",fontFamily:"'Segoe UI',sans-serif"}}>
@@ -510,7 +534,7 @@ function OrderTracker({ orderId, onClose }) {
         <p style={{fontSize:40,fontWeight:900,margin:"0 0 4px",fontFamily:"Georgia,serif"}}>#{pedido.turno}</p>
         <p style={{color:"#aaa",fontSize:13,margin:0}}>{pedido.nombre}</p>
       </div>
-      
+
       <div style={{background:G.cardBg,borderRadius:16,padding:24,border:`1px solid ${G.divider}`}}>
         {stages.map((stage, i) => {
           const isPast = currentIdx >= i;
@@ -530,10 +554,10 @@ function OrderTracker({ orderId, onClose }) {
           );
         })}
       </div>
-      
+
       {onClose && (
         <button onClick={onClose} style={{width:"100%",padding:14,borderRadius:12,border:"none",background:G.gold,color:G.dark,fontWeight:900,fontSize:15,marginTop:24,cursor:"pointer"}}>
-          Volver al Menú
+          {isDone ? "✓ Hacer un nuevo pedido" : "Ver Menú (tu pedido sigue en curso)"}
         </button>
       )}
     </div>
@@ -841,7 +865,10 @@ function App() {
   const { tenantId, colRef, pausado, horario, unlockAudio, playAddToCart, playOrderConfirmed } = useTenant();
   const isClosed = useIsClosedHours(horario);
   const isDisabled = isClosed || pausado;
-  const [trackingOrderId, setTrackingOrderId] = useState(localStorage.getItem("trackingOrderId"));
+  const [trackingOrderId, setTrackingOrderId] = useState(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("track");
+    return fromUrl || localStorage.getItem("trackingOrderId");
+  });
   const [cat,       setCat]       = useState("Botanas");
   const [cart,      setCart]      = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -852,6 +879,10 @@ function App() {
   const categories = Object.keys(menu);
   const cartCount  = cart.reduce((s,i)=>s+i.qty,0);
   const cartTotal  = cart.reduce((s,i)=>s+i.totalPrice,0);
+
+  useEffect(() => {
+    if (trackingOrderId) localStorage.setItem("trackingOrderId", trackingOrderId);
+  }, [trackingOrderId]);
 
   // Unlock audio on first interaction
   const handleFirstInteraction = useCallback(() => {
