@@ -6,12 +6,12 @@ import {
 
 // ── Firebase singleton ───────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyBDvEi4Fd-fWi3UgYrtmOq_jnKvoay4tfs",
-  authDomain: "shekinah-pedidos.firebaseapp.com",
-  projectId: "shekinah-pedidos",
-  storageBucket: "shekinah-pedidos.firebasestorage.app",
-  messagingSenderId: "665781041109",
-  appId: "1:665781041109:web:2d1e566882fa2f4733ef5c",
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
 };
 const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getFirestore(firebaseApp);
