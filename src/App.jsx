@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  addDoc, serverTimestamp, getDoc, setDoc, onSnapshot,
-  updateDoc, increment,
-} from "firebase/firestore";
+import {  addDoc, serverTimestamp, getDoc, onSnapshot, doc, collection} from "firebase/firestore";
 import { useTenant, useIsClosedHours, TenantProvider } from "./TenantContext";
 
+
 // ─── Re-exportamos app envuelto en TenantProvider ────────────────────
+
+const buildMsg = (data) => {
+  return encodeURIComponent(`¡Hola! Mi pedido es el #${data.turno}. ID de rastreo: ${data.orderId}`); };
+
 export default function AppRoot() {
   return (
     <TenantProvider>
@@ -33,8 +35,9 @@ const BOMBA_PRICE     = 165;
 const EXTRA_SUSHI     = 20;
 const EXTRA_PLAT      = 30;
 const SUSHI_EXTRAS    = ["Philadelphia","Gratinado"];
+const [trackingOrderId, setTrackingOrderId] = useState(localStorage.getItem("trackingOrderId"));
 
-// ─── Static menu (used as fallback when Firestore is unreachable) ────
+// menu statico por si no hay firestore
 const MENU_STATIC = {
   Botanas: [
     { id:"b1",  name:"Gohan",               price:150, desc:"Base de arroz, mix de camarón, res, pollo, pepino, cubierto de zanahoria, con abanico de aguacate, tampico y philadelphia.", tags:["Popular"] },
@@ -120,26 +123,19 @@ const CAT_ICONS = {
   Hamburguesas:"🍔", Paquetes:"📦", Bebidas:"🧋"
 };
 
-// ── Generate turn number via Firestore atomic counter ────────────────
-// Uses /tenants/{id}/config/counters { turno: N } with FieldValue.increment
-// Returns a formatted string like "0623-007"
-async function fetchNextTurno(configDocRef) {
-  const counterRef = configDocRef("counters");
-  try {
-    await updateDoc(counterRef, { turno: increment(1) });
-  } catch (_) {
-    // Document doesn't exist yet — initialize it
-    await setDoc(counterRef, { turno: 1 }, { merge: true });
-  }
-  const snap = await getDoc(counterRef);
-  const n = snap.exists() ? (snap.data().turno ?? 1) : 1;
+//  Generador de turno
+function generateTurno() {
   const now = new Date();
   const mm = String(now.getMonth()+1).padStart(2,"0");
   const dd = String(now.getDate()).padStart(2,"0");
-  return `${mm}${dd}-${String(n).padStart(3,"0")}`;
+  const dateKey = `${mm}${dd}`;
+  const storageKey = `turno_${dateKey}`;
+  const current = parseInt(localStorage.getItem(storageKey) || "0", 10) + 1;
+  localStorage.setItem(storageKey, String(current));
+  return `${dateKey}-${String(current).padStart(3,"0")}`;
 }
 
-// ── Shared UI ────────────────────────────────────────────────────────
+// 
 const Chip = ({ label, active, onClick, danger, small }) => (
   <button id={`chip-${label}`} onClick={onClick} style={{
     padding: small ? "3px 10px" : "5px 13px", borderRadius:20, cursor:"pointer",
@@ -157,7 +153,7 @@ const Label = ({children}) => (
     textTransform:"uppercase",margin:"0 0 6px"}}>{children}</p>
 );
 
-// ── BannerCierre ─────────────────────────────────────────────────────
+// 
 function BannerCierre({ pausado }) {
   const [visible, setVisible] = useState(true);
   if (!visible) return null;
@@ -191,7 +187,7 @@ function BannerCierre({ pausado }) {
   );
 }
 
-// ── SearchBar ────────────────────────────────────────────────────────
+// ── barraa de busqueda, no creo dejarla
 function SearchBar({ value, onChange }) {
   return (
     <div style={{padding:"10px 16px 6px", background:G.warmGray}}>
@@ -272,6 +268,7 @@ function MenuItem({ item, onAdd, disabled }) {
   const [note,    setNote]    = useState("");
   const [qty,     setQty]     = useState(1);
   const [alga, setAlga] = useState(true);
+  const [preparacion, setPreparacion] = useState(null);
 
   const toggleSushiExtra = (e) =>
     setExtras(prev => prev.includes(e) ? prev.filter(x=>x!==e) : [...prev,e]);
@@ -290,9 +287,10 @@ function MenuItem({ item, onAdd, disabled }) {
     if (item.hasProtein && !protein)       { alert("Elige una proteína."); return; }
     if (item.hasBurgerProtein && !protein) { alert("Elige la carne de tu hamburguesa."); return; }
     if (item.sauceOptions && !sauce)       { alert("Elige una salsa."); return; }
-    onAdd({ ...item, protein, sauce, bomba, extras, platExtras, alga: item.isSushi ? alga : null, note, qty, totalPrice:total });
+    if (item.isSushi && !preparacion)      { alert("Elige una preparación para tu sushi."); return; }
+    onAdd({ ...item, protein, sauce, bomba, extras, platExtras, alga: item.isSushi ? alga : null, preparacion: item.isSushi ? preparacion : null, note, qty, totalPrice:total });
     setOpen(false); setProtein(null); setSauce(null);
-    setBomba(false); setExtras([]); setPlatExtras([]); setAlga(true); setNote(""); setQty(1);
+    setBomba(false); setExtras([]); setPlatExtras([]); setAlga(true); setPreparacion(null); setNote(""); setQty(1);
   };
 
   const proteins = item.hasBurgerProtein ? PROTEINS_BURGER
@@ -477,7 +475,73 @@ function CartBar({ count, total, onClick }) {
   );
 }
 
-// ── Field ────────────────────────────────────────────────────────────
+
+// ── OrderTracker ───────────────────────────────────────────────────────
+function OrderTracker({ orderId, onClose }) {
+  
+  const { db, tenantId } = useTenant();
+  const [pedido, setPedido] = useState(null);
+  
+  useEffect(() => {
+    if (!orderId || !tenantId || !db) return;
+
+    // CORRECCIÓN: Usamos el 'tenantId' del contexto en la ruta
+    const unsub = onSnapshot(doc(db, "tenants", tenantId, "pedidos", orderId), (snap) => {
+      if(snap.exists()) setPedido({id:snap.id, ...snap.data()});
+    });
+    return unsub;
+  }, [orderId, tenantId, db]); // Agregamos las dependencias correctas
+
+  if(!pedido) return <div style={{padding:40,textAlign:"center",color:G.textSub}}>Cargando estado...</div>;
+
+  const est = pedido.estado;
+  const stages = [
+    {key:"nuevo", label:"Recibido", icon:"📥"},
+    {key:"en_proceso", label:"Preparando", icon:"🍳"},
+    {key:"listo", label:pedido.entrega==="domicilio"?"En Camino":"Listo para recoger", icon:pedido.entrega==="domicilio"?"🛵":"🏪"},
+    {key:"entregado", label:"Entregado", icon:"✅"}
+  ];
+  
+  const currentIdx = stages.findIndex(s=>s.key===est);
+
+  return (
+    <div style={{background:G.offWhite,minHeight:"100vh",padding:20,maxWidth:640,margin:"0 auto",fontFamily:"'Segoe UI',sans-serif"}}>
+      <div style={{background:G.dark,borderRadius:16,padding:24,color:"#fff",border:`2px solid ${G.gold}`,marginBottom:24,textAlign:"center"}}>
+        <p style={{color:G.goldLight,fontSize:12,letterSpacing:2,margin:"0 0 8px"}}>ESTADO DE TU PEDIDO</p>
+        <p style={{fontSize:40,fontWeight:900,margin:"0 0 4px",fontFamily:"Georgia,serif"}}>#{pedido.turno}</p>
+        <p style={{color:"#aaa",fontSize:13,margin:0}}>{pedido.nombre}</p>
+      </div>
+      
+      <div style={{background:G.cardBg,borderRadius:16,padding:24,border:`1px solid ${G.divider}`}}>
+        {stages.map((stage, i) => {
+          const isPast = currentIdx >= i;
+          const isCurrent = currentIdx === i;
+          return (
+            <div key={stage.key} style={{display:"flex",gap:16,marginBottom:i===stages.length-1?0:24,opacity:isPast?1:0.4}}>
+              <div style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center"}}>
+                <div style={{width:36,height:36,borderRadius:"50%",background:isCurrent?G.gold:isPast?G.dark:G.divider,color:isCurrent?G.dark:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,zIndex:2}}>
+                  {stage.icon}
+                </div>
+                {i < stages.length-1 && <div style={{position:"absolute",top:36,bottom:-24,width:2,background:isPast?G.dark:G.divider,zIndex:1}} />}
+              </div>
+              <div style={{paddingTop:8}}>
+                <p style={{margin:0,fontWeight:isCurrent?900:700,color:isCurrent?G.goldBg:G.dark,fontSize:16}}>{stage.label}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {onClose && (
+        <button onClick={onClose} style={{width:"100%",padding:14,borderRadius:12,border:"none",background:G.gold,color:G.dark,fontWeight:900,fontSize:15,marginTop:24,cursor:"pointer"}}>
+          Volver al Menú
+        </button>
+      )}
+    </div>
+  );
+}
+
+// 
 function Field({ label, value, onChange, placeholder, type="text" }) {
   return (
     <div style={{marginBottom:12}}>
@@ -500,7 +564,7 @@ function SummaryRow({ label, value }) {
   );
 }
 
-// ── OrderModal ───────────────────────────────────────────────────────
+// ── OrderModal 
 function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
   const { configDocRef } = useTenant();
   const [name,     setName]     = useState("");
@@ -510,6 +574,7 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
   const [payment,  setPayment]  = useState(null);
   const [step,     setStep]     = useState(1);
   const [sending,  setSending]  = useState(false);
+  const [trackingOrderId, setTrackingOrderId] = useState(null);
   const [deliveryCost, setDeliveryCost] = useState(30);
   const [confirmedTurno, setConfirmedTurno] = useState(null);
 
@@ -774,10 +839,10 @@ const nextBtn = {
 
 // ── App ──────────────────────────────────────────────────────────────
 function App() {
-  const { tenantId, colRef, configDocRef, pausado, horario, unlockAudio, playAddToCart, playOrderConfirmed } = useTenant();
+  const { tenantId, colRef, pausado, horario, unlockAudio, playAddToCart, playOrderConfirmed } = useTenant();
   const isClosed = useIsClosedHours(horario);
   const isDisabled = isClosed || pausado;
-
+  const [trackingOrderId, setTrackingOrderId] = useState(localStorage.getItem("trackingOrderId"));
   const [cat,       setCat]       = useState("Botanas");
   const [cart,      setCart]      = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -860,7 +925,7 @@ function App() {
     return matchSearch && matchTags;
   });
 
-  const buildMsg = ({ name, phone, delivery, address, payment, deliveryCost, total, turno }) => {
+  const buildMsg = ({ name, phone, delivery, address, payment, deliveryCost, total, turno, orderId }) => {
     let msg = `🔥 *NUEVO PEDIDO — SHEKINAH*\n`;
     msg += `🎫 *Turno: #${turno}*\n`;
     msg += `👤 *Cliente:* ${name}\n`;
@@ -882,16 +947,16 @@ function App() {
       if(item.note) msg+=`   • Nota: ${item.note}\n`;
     });
     if(delivery==="domicilio") msg+=`\n🛵 Envío: $${deliveryCost}\n`;
-    msg += `\n━━━━━━━━━━━━━━━━━━━━\n💰 *TOTAL: $${total} MXN*\n\n¡Gracias! 🙏`;
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n💰 *TOTAL: ${total} MXN*\n\n📍 Sigue tu pedido en vivo aquí:\n${window.location.origin}/?rest=${resolveTenantId()}&track=${orderId}\n\n¡Gracias! 🙏`;
     return encodeURIComponent(msg);
   };
 
   const handleSend = async ({ name, phone, delivery, address, payment, deliveryCost, total }, setSending, mode, setConfirmedTurno) => {
     if (isDisabled) return;
     setSending(true);
-    const turno = await fetchNextTurno(configDocRef);
+    const turno = generateTurno();
     try {
-      await addDoc(colRef("pedidos"), {
+  const docRef = await addDoc(colRef("pedidos"), {
         nombre: name, telefono: phone, entrega: delivery,
         direccion: address||"", pago: payment,
         costoEnvio: delivery==="domicilio"?deliveryCost:0,
@@ -901,22 +966,32 @@ function App() {
           extras:i.extras||[], platExtras:i.platExtras||[],
           nota:i.note||"", subtotal:i.totalPrice,
           alga: i.alga ?? null,
+          preparacion: i.prep || ""
         })),
         total, estado:"nuevo", origen:"web",
         creadoEn:serverTimestamp(), turno,
         tenantId,
       });
+
+      const orderId = docRef.id;
+      localStorage.setItem("trackingOrderId", orderId);
+      setTrackingOrderId(orderId);
+      setCart([]);          
+      setShowModal(false);   
+      
+      if(mode==="whatsapp"){
+        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${buildMsg({name,phone,delivery,address,payment,deliveryCost,total,turno,orderId})}`,"_blank");
+      }
     } catch(e){ console.error(e); }
 
     playOrderConfirmed();
     setConfirmedTurno(turno);
 
-    if(mode==="whatsapp"){
-      window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${buildMsg({name,phone,delivery,address,payment,deliveryCost,total,turno})}`,"_blank");
-    }
+
     setSending(false);
     setCart([]);
   };
+
 
   return (
     <div
@@ -924,92 +999,98 @@ function App() {
       style={{background:G.offWhite,minHeight:"100vh",
         fontFamily:"'Segoe UI',system-ui,sans-serif",maxWidth:640,margin:"0 auto"}}>
 
-      {isDisabled && <BannerCierre pausado={pausado} />}
+      {/* SI HAY PEDIDO ACTIVO MUESTRA EL RASTREADOR */}
+      {trackingOrderId && <OrderTracker orderId={trackingOrderId} onClose={() => { setTrackingOrderId(null); localStorage.removeItem("trackingOrderId"); }} />}
+      
+      {/* SI NO HAY PEDIDO, MUESTRA EL MENÚ */}
+      {!trackingOrderId && <>
+        {isDisabled && <BannerCierre pausado={pausado} />}
 
-      {/* Header */}
-      <div style={{
-        background:G.dark,padding:"18px 20px 14px",
-        borderBottom:`3px solid ${G.gold}`,
-        position:"sticky",top:0,zIndex:150,
-        marginTop: isDisabled ? 64 : 0,
-        transition:"margin-top .3s"
-      }}>
-        <div style={{display:"flex",alignItems:"center"}}>
-          <div>
-            <p style={{color:G.gold,fontFamily:"Georgia,serif",
-              fontSize:22,fontWeight:900,margin:0,letterSpacing:2}}>SHEKINAH</p>
-            <p style={{color:`${G.goldLight}88`,fontSize:9,margin:0,
-              letterSpacing:3,fontWeight:600}}>RESTAURANT · EL SABOR A GLORIA</p>
+        {/* Header */}
+        <div style={{
+          background:G.dark,padding:"18px 20px 14px",
+          borderBottom:`3px solid ${G.gold}`,
+          position:"sticky",top:0,zIndex:150,
+          marginTop: isDisabled ? 64 : 0,
+          transition:"margin-top .3s"
+        }}>
+          <div style={{display:"flex",alignItems:"center"}}>
+            <div>
+              <p style={{color:G.gold,fontFamily:"Georgia,serif",
+                fontSize:22,fontWeight:900,margin:0,letterSpacing:2}}>SHEKINAH</p>
+              <p style={{color:`${G.goldLight}88`,fontSize:9,margin:0,
+                letterSpacing:3,fontWeight:600}}>RESTAURANT · EL SABOR A GLORIA</p>
+            </div>
+            {cartCount>0&&(
+              <button id="btn-header-carrito" onClick={()=>setShowModal(true)} style={{
+                marginLeft:"auto",background:G.gold,border:"none",borderRadius:10,
+                padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:7}}>
+                <span style={{fontSize:13}}>🛒</span>
+                <span style={{color:G.dark,fontWeight:900,fontSize:13}}>{cartCount} · ${cartTotal}</span>
+              </button>
+            )}
           </div>
-          {cartCount>0&&(
-            <button id="btn-header-carrito" onClick={()=>setShowModal(true)} style={{
-              marginLeft:"auto",background:G.gold,border:"none",borderRadius:10,
-              padding:"6px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:7}}>
-              <span style={{fontSize:13}}>🛒</span>
-              <span style={{color:G.dark,fontWeight:900,fontSize:13}}>{cartCount} · ${cartTotal}</span>
-            </button>
+        </div>
+
+        {/* Bomba banner */}
+        <div style={{background:G.dark,padding:"8px 20px",borderBottom:"1px solid #333"}}>
+          <p style={{color:"#ddd",fontSize:12,margin:0}}>
+            💣 <span style={{color:G.goldLight,fontWeight:700}}>Convierte cualquier rollo en BOMBA</span>
+            {" "}por solo $165 · Philadelphia, aguacate y pepino
+          </p>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"flex",overflowX:"auto",gap:0,
+          background:G.warmGray,borderBottom:`2px solid ${G.divider}`,
+          scrollbarWidth:"none",padding:"0 4px"}}>
+          {categories.map(c=>(
+            <button key={c} id={`tab-${c}`} onClick={()=>{setCat(c);setSearch("");setActiveTags([]);}} style={{
+              padding:"11px 14px",border:"none",
+              borderBottom:`3px solid ${cat===c?G.gold:"transparent"}`,
+              background:"transparent",color:cat===c?G.gold:G.textSub,
+              fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s"
+            }}>{CAT_ICONS[c]} {c}</button>
+          ))}
+        </div>
+
+        {/* Search + Tag pills */}
+        <SearchBar value={search} onChange={setSearch} />
+        <TagPills active={activeTags} onChange={setActiveTags} />
+
+        {/* Menu */}
+        <div style={{padding:"16px",paddingBottom:cartCount?100:24}}>
+          <div style={{background:G.goldBg,borderRadius:6,padding:"7px 14px",
+            marginBottom:14,display:"inline-block"}}>
+            <p style={{color:"#fff",fontWeight:900,fontSize:17,
+              fontFamily:"Georgia,serif",margin:0}}>{CAT_ICONS[cat]} {cat}</p>
+          </div>
+          {cat==="Sushi"&&(
+            <div style={{background:"#1C1208",borderRadius:8,padding:"9px 13px",marginBottom:14}}>
+              <p style={{color:"#eee",fontSize:12,margin:0}}>
+                Todos los rollos incluyen <strong style={{color:G.goldLight}}>queso Philadelphia, aguacate y pepino</strong>.
+                {" "}Ingrediente extra: <strong style={{color:G.goldLight}}>+${EXTRA_SUSHI}</strong>.
+              </p>
+            </div>
           )}
+          {filteredItems.length === 0 && (
+            <div style={{textAlign:"center",padding:"40px 20px"}}>
+              <p style={{fontSize:32,margin:"0 0 8px"}}>🔍</p>
+              <p style={{color:G.textSub,fontSize:14}}>Sin resultados para "{search}"</p>
+            </div>
+          )}
+          {filteredItems.map(item=>(
+            <MenuItem key={item.id} item={item} onAdd={addToCart} disabled={isDisabled} />
+          ))}
         </div>
-      </div>
 
-      {/* Bomba banner */}
-      <div style={{background:G.dark,padding:"8px 20px",borderBottom:"1px solid #333"}}>
-        <p style={{color:"#ddd",fontSize:12,margin:0}}>
-          💣 <span style={{color:G.goldLight,fontWeight:700}}>Convierte cualquier rollo en BOMBA</span>
-          {" "}por solo $165 · Philadelphia, aguacate y pepino
-        </p>
-      </div>
+        <CartBar count={cartCount} total={cartTotal} onClick={()=>setShowModal(true)} />
 
-      {/* Tabs */}
-      <div style={{display:"flex",overflowX:"auto",gap:0,
-        background:G.warmGray,borderBottom:`2px solid ${G.divider}`,
-        scrollbarWidth:"none",padding:"0 4px"}}>
-        {categories.map(c=>(
-          <button key={c} id={`tab-${c}`} onClick={()=>{setCat(c);setSearch("");setActiveTags([]);}} style={{
-            padding:"11px 14px",border:"none",
-            borderBottom:`3px solid ${cat===c?G.gold:"transparent"}`,
-            background:"transparent",color:cat===c?G.gold:G.textSub,
-            fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s"
-          }}>{CAT_ICONS[c]} {c}</button>
-        ))}
-      </div>
-
-      {/* Search + Tag pills */}
-      <SearchBar value={search} onChange={setSearch} />
-      <TagPills active={activeTags} onChange={setActiveTags} />
-
-      {/* Menu */}
-      <div style={{padding:"16px",paddingBottom:cartCount?100:24}}>
-        <div style={{background:G.goldBg,borderRadius:6,padding:"7px 14px",
-          marginBottom:14,display:"inline-block"}}>
-          <p style={{color:"#fff",fontWeight:900,fontSize:17,
-            fontFamily:"Georgia,serif",margin:0}}>{CAT_ICONS[cat]} {cat}</p>
-        </div>
-        {cat==="Sushi"&&(
-          <div style={{background:"#1C1208",borderRadius:8,padding:"9px 13px",marginBottom:14}}>
-            <p style={{color:"#eee",fontSize:12,margin:0}}>
-              Todos los rollos incluyen <strong style={{color:G.goldLight}}>queso Philadelphia, aguacate y pepino</strong>.
-              {" "}Ingrediente extra: <strong style={{color:G.goldLight}}>+${EXTRA_SUSHI}</strong>.
-            </p>
-          </div>
+        {showModal&&(
+          <OrderModal items={cart} onClose={()=>setShowModal(false)}
+            onSend={handleSend} onRemove={removeFromCart} disabled={isDisabled} />
         )}
-        {filteredItems.length === 0 && (
-          <div style={{textAlign:"center",padding:"40px 20px"}}>
-            <p style={{fontSize:32,margin:"0 0 8px"}}>🔍</p>
-            <p style={{color:G.textSub,fontSize:14}}>Sin resultados para "{search}"</p>
-          </div>
-        )}
-        {filteredItems.map(item=>(
-          <MenuItem key={item.id} item={item} onAdd={addToCart} disabled={isDisabled} />
-        ))}
-      </div>
-
-      <CartBar count={cartCount} total={cartTotal} onClick={()=>setShowModal(true)} />
-
-      {showModal&&(
-        <OrderModal items={cart} onClose={()=>setShowModal(false)}
-          onSend={handleSend} onRemove={removeFromCart} disabled={isDisabled} />
-      )}
+      </>} {/* <-- ESTE ES EL CIERRE DEL FRAGMENTO QUE FALTABA */}
     </div>
   );
 }

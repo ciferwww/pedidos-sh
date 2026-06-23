@@ -100,8 +100,31 @@ export function TenantProvider({ children }) {
     _playTone(659.25, 0.22, 0.25, "sine", 0.16); // Mi4
   };
 
-  /** Admin new-order beep */
-  const playNewOrderBeep = () => _playTone(440, 0.09, 0.35, "square");
+  const playNewOrderBeep = () => {
+    if (!audioCtxRef.current) return;
+    const ctx = audioCtxRef.current;
+    if (ctx.state === "suspended") ctx.resume();
+    
+    const duration = 3.0;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    
+    for (let i = 0; i < duration * 10; i++) {
+      const time = ctx.currentTime + (i * 0.1);
+      osc.frequency.setValueAtTime(i % 2 === 0 ? 600 : 400, time);
+    }
+    
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05);
+    gain.gain.setValueAtTime(0.5, ctx.currentTime + duration - 0.1);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  };
 
   return (
     <TenantContext.Provider value={{

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   onSnapshot, doc, updateDoc, orderBy, query,
-  addDoc, serverTimestamp, getDoc, setDoc, where, getDocs, Timestamp, increment,
+  addDoc, serverTimestamp, getDoc, setDoc, where, getDocs, Timestamp,
 } from "firebase/firestore";
 import { db, useTenant, TenantProvider } from "./TenantContext";
 
@@ -81,21 +81,16 @@ const PROTEINS_BURGER=["Res","Pollo","Camarón"];
 const SAUCES_BONELESS = ["BBQ", "Mitad y Mitad", "Búfalo", "Mixto"];
 const SAUCES_ROLL     = ["BBQ", "Búfalo", "Mixto"];
 
-// ── Generate turn number via Firestore atomic counter ────────────────
-// Uses /tenants/{id}/config/counters { turno: N } with FieldValue.increment
-async function fetchNextTurno(configDocRef) {
-  const counterRef = configDocRef("counters");
-  try {
-    await updateDoc(counterRef, { turno: increment(1) });
-  } catch (_) {
-    await setDoc(counterRef, { turno: 1 }, { merge: true });
-  }
-  const snap = await getDoc(counterRef);
-  const n = snap.exists() ? (snap.data().turno ?? 1) : 1;
+// ── Generate turn number (local, date-indexed) ───────────────────────
+function generateTurno() {
   const now = new Date();
   const mm = String(now.getMonth()+1).padStart(2,"0");
   const dd = String(now.getDate()).padStart(2,"0");
-  return `${mm}${dd}-${String(n).padStart(3,"0")}`;
+  const dateKey = `${mm}${dd}`;
+  const storageKey = `turno_${dateKey}`;
+  const current = parseInt(localStorage.getItem(storageKey) || "0", 10) + 1;
+  localStorage.setItem(storageKey, String(current));
+  return `${dateKey}-${String(current).padStart(3,"0")}`;
 }
 
 // ── PedidoTimer ──────────────────────────────────────────────────────
@@ -255,6 +250,7 @@ function OrderCard({ pedido, onChangeEstado }) {
                   {a.salsa&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>[{a.salsa}]</span>}
                   {a.alga !== null && a.alga !== undefined &&
                     <span style={{color:G.textSub,fontSize:11,marginLeft:5}}>({a.alga ? "🌿 Con alga" : "Sin alga"})</span>}
+                  {a.preparacion&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>({a.preparacion})</span>}
                   {a.extras?.length>0&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>+{a.extras.join(",")}</span>}
                   {a.nota&&<p style={{color:"#e67e22",fontSize:11,margin:"2px 0 0",fontStyle:"italic"}}>📝 {a.nota}</p>}
                 </div>
@@ -374,7 +370,7 @@ function DiscountPanel({ subtotal, onChange }) {
 
 // ── POS ──────────────────────────────────────────────────────────────
 function POS({ onPedidoCreado }) {
-  const { colRef, configDocRef, playAddToCart } = useTenant();
+  const { colRef, playAddToCart } = useTenant();
   const isMobile = window.innerWidth < 768;
   const [cat,setCat]=useState("Sushi");
   const [cart,setCart]=useState([]);
@@ -384,6 +380,7 @@ function POS({ onPedidoCreado }) {
   const [tempProtein,setTempProtein]=useState(null);
   const [tempSauce,setTempSauce]=useState(null);
   const [tempAlga, setTempAlga] = useState(true);
+  const [tempPrep, setTempPrep] = useState(null);
   const [sending,setSending]=useState(false);
   const [discount, setDiscount] = useState({ descuentoAplicado:0, tipoDescuento:"%", totalFinal:0 });
 
@@ -411,6 +408,7 @@ function POS({ onPedidoCreado }) {
     const item=showQuick;
     if((item.protein||item.burgerProtein)&&!tempProtein){ alert("Elige proteína"); return; }
     if(item.sauce&&!tempSauce){ alert("Elige salsa"); return; }
+    if(item.isSushi&&!tempPrep){ alert("Elige preparación (Natural/Empanizado/Mitad y Mitad)"); return; }
     playAddToCart();
     setCart(prev=>[...prev,{
       id:item.id+"-"+Date.now(), nombre:item.name, precio:item.price,
@@ -433,7 +431,7 @@ function POS({ onPedidoCreado }) {
   const cobrar=async()=>{
     if(cart.length===0){alert("Agrega artículos");return;}
     setSending(true);
-    const turno = await fetchNextTurno(configDocRef);
+    const turno = generateTurno();
     const descuentoAplicado = discount.descuentoAplicado || 0;
     const tipoDescuento = discount.tipoDescuento;
     const total = parseFloat(totalFinal.toFixed(2));
