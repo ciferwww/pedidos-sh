@@ -394,6 +394,7 @@ function POS({ onPedidoCreado }) {
       setTempProtein(null);
       setTempSauce(null);
       setTempAlga(true);
+      setTempPrep(null);
     } else {
       playAddToCart();
       setCart(prev=>{
@@ -414,7 +415,8 @@ function POS({ onPedidoCreado }) {
       id:item.id+"-"+Date.now(), nombre:item.name, precio:item.price,
       cantidad:1, subtotal:item.price,
       protein:tempProtein||"", salsa:tempSauce||"",
-      alga: showQuick.isSushi ? tempAlga : null
+      alga: showQuick.isSushi ? tempAlga : null,
+      preparacion: showQuick.isSushi ? tempPrep : ""
     }]);
     setShowQuick(null);
   };
@@ -444,7 +446,8 @@ function POS({ onPedidoCreado }) {
         articulos:cart.map(i=>({
           nombre:i.nombre,cantidad:i.cantidad,protein:i.protein||"",
           salsa:i.salsa||"",bomba:false,extras:[],platExtras:[],nota:"",subtotal:i.subtotal,
-          alga: i.alga ?? null
+          alga: i.alga ?? null,
+          preparacion: i.preparacion || ""
         })),
         subtotal, descuentoAplicado, tipoDescuento,
         totalFinal: total, total,
@@ -477,6 +480,20 @@ function POS({ onPedidoCreado }) {
                       border:`1.5px solid ${tempProtein===p?G.gold:G.divider}`,
                       background:tempProtein===p?G.gold:"transparent",
                       color:tempProtein===p?G.dark:G.textSub}}>{p}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {showQuick.isSushi && (
+              <div style={{marginBottom:12}}>
+                <p style={{color:G.textSub,fontSize:11,fontWeight:800,margin:"0 0 6px",letterSpacing:1}}>PREPARACIÓN</p>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {["Natural","Empanizado","Mitad y Mitad"].map(p=>(
+                    <button key={p} id={`quick-prep-${p.replace(/\s+/g,"-")}`} onClick={()=>setTempPrep(p)} style={{
+                      padding:"5px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
+                      border:`1.5px solid ${tempPrep===p?G.gold:G.divider}`,
+                      background:tempPrep===p?G.gold:"transparent",
+                      color:tempPrep===p?G.dark:G.textSub}}>{p}</button>
                   ))}
                 </div>
               </div>

@@ -954,8 +954,6 @@ function App() {
     setSending(true);
     const turno = generateTurno();
     try {
-
-
       const orderId = (await addDoc(colRef("pedidos"), {
         nombre: name, telefono: phone, entrega: delivery,
         direccion: address || "", pago: payment,
@@ -966,7 +964,7 @@ function App() {
           extras: i.extras || [], platExtras: i.platExtras || [],
           nota: i.note || "", subtotal: i.totalPrice,
           alga: i.alga ?? null,
-          preparacion: i.prep || ""
+          preparacion: i.preparacion || ""
         })),
         total, estado: "nuevo", origen: "web",
         creadoEn: serverTimestamp(), turno,
@@ -974,20 +972,21 @@ function App() {
       })).id;
       localStorage.setItem("trackingOrderId", orderId);
       setTrackingOrderId(orderId);
-      setCart([]);          
-      setShowModal(false);   
-      
+      setCart([]);
+      setShowModal(false);
+
       if(mode==="whatsapp"){
         window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${buildMsg({name,phone,delivery,address,payment,deliveryCost,total,turno,orderId})}`,"_blank");
       }
-    } catch(e){ console.error(e); }
 
-    playOrderConfirmed();
-    setConfirmedTurno(turno);
-
+      playOrderConfirmed();
+      setConfirmedTurno(turno);
+    } catch(e){
+      console.error(e);
+      alert("No se pudo enviar tu pedido. Por favor revisa tu conexión e intenta de nuevo. Si el problema sigue, avísanos por WhatsApp.");
+    }
 
     setSending(false);
-    setCart([]);
   };
 
 
