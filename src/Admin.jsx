@@ -3,7 +3,9 @@ import {
   onSnapshot, doc, updateDoc, orderBy, query,
   addDoc, serverTimestamp, getDoc, setDoc, where, getDocs, Timestamp,
 } from "firebase/firestore";
-import { db, useTenant, TenantProvider } from "./TenantContext";
+import { db, useTenant, useTenantConfig, TenantProvider } from "./TenantContext";
+import AdminLogin from "./AdminLogin";
+import KDS from "./KDS";
 
 // ─── Re-exportamos Admin envuelto en TenantProvider ──────────────────
 export default function AdminRoot() {
@@ -15,14 +17,6 @@ export default function AdminRoot() {
 }
 
 // ────────────────────────────────────────────────────────────────────
-const ADMIN_PASSWORD = "shekinah2024";
-
-const G = {
-  gold:"#B8892A", goldLight:"#C9A84C", goldBg:"#7a4f1e",
-  dark:"#1C1208", offWhite:"#F5F1EA", warmGray:"#E8E2D8",
-  textMain:"#1C1208", textSub:"#5a4a2a", divider:"#D4C4A0",
-  cardBg:"#FDFAF4", green:"#25D366",
-};
 
 const ESTADOS = {
   nuevo:      { label:"Nuevo",      color:"#e74c3c", bg:"#fdecea", icon:"🔴" },
@@ -137,7 +131,7 @@ function PedidoTimer({ creadoEn }) {
 }
 
 // ── TurnoTag ─────────────────────────────────────────────────────────
-function TurnoTag({ turno }) {
+function TurnoTag({ turno, G }) {
   if (!turno) return null;
   return (
     <span style={{
@@ -148,38 +142,8 @@ function TurnoTag({ turno }) {
   );
 }
 
-// ── Login ────────────────────────────────────────────────────────────
-function LoginScreen({ onLogin }) {
-  const { unlockAudio } = useTenant();
-  const [pw,setPw]=useState(""); const [err,setErr]=useState(false);
-  const tryLogin=()=>{
-    if(pw===ADMIN_PASSWORD){ unlockAudio(); onLogin(); }
-    else{ setErr(true); setPw(""); }
-  };
-  return (
-    <div style={{minHeight:"100vh",background:G.dark,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:G.offWhite,borderRadius:16,padding:"40px 32px",
-        width:"100%",maxWidth:360,textAlign:"center",border:`2px solid ${G.gold}`}}>
-        <p style={{fontSize:32,margin:"0 0 4px"}}>🔥</p>
-        <p style={{fontFamily:"Georgia,serif",color:G.gold,fontSize:22,fontWeight:900,
-          margin:"0 0 4px",letterSpacing:2}}>SHEKINAH</p>
-        <p style={{color:G.textSub,fontSize:12,margin:"0 0 28px",letterSpacing:2}}>PANEL DE ADMINISTRACIÓN</p>
-        <input id="admin-password" type="password" value={pw} onChange={e=>{setPw(e.target.value);setErr(false);}}
-          onKeyDown={e=>e.key==="Enter"&&tryLogin()} placeholder="Contraseña"
-          style={{width:"100%",padding:"11px 14px",borderRadius:9,fontSize:15,
-            border:`2px solid ${err?"#e74c3c":G.divider}`,boxSizing:"border-box",
-            marginBottom:8,fontFamily:"inherit",background:"#fff",color:G.dark,outline:"none"}} />
-        {err&&<p style={{color:"#e74c3c",fontSize:12,margin:"0 0 8px"}}>Contraseña incorrecta</p>}
-        <button id="btn-login" onClick={tryLogin} style={{width:"100%",padding:"12px",borderRadius:9,
-          border:"none",background:G.gold,color:G.dark,fontWeight:900,fontSize:15,cursor:"pointer"}}>
-          Entrar →</button>
-      </div>
-    </div>
-  );
-}
-
 // ── OrderCard ────────────────────────────────────────────────────────
-function OrderCard({ pedido, onChangeEstado }) {
+export function OrderCard({ pedido, onChangeEstado, G }) {
   const [open,setOpen]=useState(false);
   const est=ESTADOS[pedido.estado]||ESTADOS.nuevo;
   const fecha=pedido.creadoEn?.toDate
@@ -216,7 +180,7 @@ function OrderCard({ pedido, onChangeEstado }) {
           <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
             <p style={{color:G.dark,fontWeight:800,fontSize:14,margin:0,
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pedido.nombre}</p>
-            <TurnoTag turno={pedido.turno} />
+            <TurnoTag turno={pedido.turno} G={G} />
           </div>
           <div style={{display:"flex",alignItems:"center",gap:7,marginTop:3,flexWrap:"wrap"}}>
             <p style={{color:G.textSub,fontSize:11,margin:0}}>{origenLabel}</p>
@@ -323,7 +287,7 @@ function useNewOrderAlert(pedidos, playNewOrderBeep) {
 }
 
 // ── DiscountPanel ────────────────────────────────────────────────────
-function DiscountPanel({ subtotal, onChange }) {
+function DiscountPanel({ subtotal, onChange, G }) {
   const [tipo,    setTipo]    = useState("%");
   const [valor,   setValor]   = useState("");
 
@@ -385,7 +349,7 @@ function DiscountPanel({ subtotal, onChange }) {
 }
 
 // ── POS ──────────────────────────────────────────────────────────────
-function POS({ onPedidoCreado }) {
+function POS({ onPedidoCreado, G }) {
   const { colRef, playAddToCart } = useTenant();
   const isMobile = window.innerWidth < 768;
   const [cat,setCat]=useState("Sushi");
@@ -732,7 +696,7 @@ function POS({ onPedidoCreado }) {
         <div style={{borderTop:`2px solid ${G.divider}`,background:"#f5f1e8"}}>
           {cart.length > 0 && (
             <div style={{padding:"12px 14px 0"}}>
-              <DiscountPanel subtotal={subtotal} onChange={setDiscount} />
+              <DiscountPanel subtotal={subtotal} onChange={setDiscount} G={G} />
             </div>
           )}
           <div style={{padding:"12px 14px"}}>
@@ -776,7 +740,7 @@ const smallBtn={
 };
 
 // ── Cierre del día ───────────────────────────────────────────────────
-function Cierre() {
+function Cierre({ G }) {
   const { colRef } = useTenant();
   const [fecha,setFecha]=useState(new Date().toISOString().slice(0,10));
   const [pedidos,setPedidos]=useState([]);
@@ -924,7 +888,7 @@ function Cierre() {
 }
 
 // ── Config ───────────────────────────────────────────────────────────
-function Config() {
+function Config({ G }) {
   const { configDocRef, pausado, setPausa } = useTenant();
   const [deliveryCost,setDeliveryCost]=useState(30);
   const [saved,setSaved]=useState(false);
@@ -993,8 +957,20 @@ function Config() {
   );
 }
 
+// ── DashboardGerencial (placeholder — se construye en PROMPT 3) ───────
+function DashboardGerencial() {
+  return (
+    <div style={{padding:"40px 20px",textAlign:"center"}}>
+      <p style={{fontSize:36,margin:"0 0 8px"}}>📈</p>
+      <p style={{color:"#5a4a2a",fontWeight:700}}>
+        Dashboard Gerencial — gráficos de ganancias y platillos top próximamente.
+      </p>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────
-function Dashboard({ onLogout }) {
+function Dashboard({ empleado, onLogout }) {
   const { colRef, tenantId, pausado, playNewOrderBeep } = useTenant();
   const isMobile = window.innerWidth < 768;
   const [tab,setTab]=useState("pedidos");
@@ -1002,6 +978,7 @@ function Dashboard({ onLogout }) {
   const [loading,setLoading]=useState(true);
   const [filtro,setFiltro]=useState("todos");
   const stablePlayBeep = useCallback(playNewOrderBeep, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const { colors: G, brand, isSuspended: tenantSuspended } = useTenantConfig();
 
   useNewOrderAlert(pedidos, stablePlayBeep);
 
@@ -1026,12 +1003,14 @@ function Dashboard({ onLogout }) {
   const pendiente=pedidos.filter(p=>p.estado!=="entregado").reduce((s,p)=>s+(p.totalFinal??p.total??0),0);
   const hayNuevos = counts.nuevo > 0;
 
-  const TABS=[
-    {key:"pedidos",label:"📋 Pedidos"},
-    {key:"pos",label:"🏪 Punto de Venta"},
-    {key:"cierre",label:"📊 Cierre del día"},
-    {key:"config",label:"⚙️ Config"},
+  const TODAS_LAS_TABS = [
+    {key:"pedidos", label:"📋 Pedidos",            roles:["jefe","cajero"]},
+    {key:"pos",     label:"🏪 Punto de Venta",     roles:["jefe","cajero"]},
+    {key:"cierre",  label:"📊 Cierre del día",      roles:["jefe"]},
+    {key:"config",  label:"⚙️ Config",              roles:["jefe"]},
+    {key:"dash",    label:"📈 Dashboard Gerencial", roles:["jefe"]},
   ];
+  const TABS = TODAS_LAS_TABS.filter(t => t.roles.includes(empleado.rol));
 
   return (
     <div style={{minHeight:"100vh",background:"#f0ece4",fontFamily:"'Segoe UI',sans-serif"}}>
@@ -1084,6 +1063,7 @@ function Dashboard({ onLogout }) {
         </div>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:14}}>
           <div style={{textAlign:"right"}}>
+            <p style={{color:"#5a4a2a",fontSize:9,margin:0,letterSpacing:1}}>{empleado.nombre} · {empleado.rol}</p>
             <p style={{color:"#5a4a2a",fontSize:9,margin:0,letterSpacing:1}}>PENDIENTE</p>
             <p style={{color:G.gold,fontWeight:900,fontSize:16,margin:0,fontFamily:"Georgia,serif"}}>
               ${pendiente.toLocaleString()}</p>
@@ -1095,9 +1075,10 @@ function Dashboard({ onLogout }) {
       </div>
 
       {/* Content */}
-      {tab==="pos"&&<POS />}
-      {tab==="cierre"&&<Cierre />}
-      {tab==="config"&&<Config />}
+      {tab==="pos"&&<POS G={G} />}
+      {tab==="cierre"&&<Cierre G={G} />}
+      {tab==="config"&&<Config G={G} />}
+      {tab==="dash"&&<DashboardGerencial />}
       {tab==="pedidos"&&(
         <div style={{padding:"14px 16px"}}>
           <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
@@ -1131,7 +1112,7 @@ function Dashboard({ onLogout }) {
             </div>
           )}
           {filtrados.map(p=>(
-            <OrderCard key={p.id} pedido={p} onChangeEstado={cambiarEstado} />
+            <OrderCard key={p.id} pedido={p} onChangeEstado={cambiarEstado} G={G} />
           ))}
         </div>
       )}
@@ -1141,7 +1122,14 @@ function Dashboard({ onLogout }) {
 
 // ── Root ─────────────────────────────────────────────────────────────
 function Admin() {
-  const [logged,setLogged]=useState(false);
-  if(!logged) return <LoginScreen onLogin={()=>setLogged(true)} />;
-  return <Dashboard onLogout={()=>setLogged(false)} />;
+  const [empleado, setEmpleado] = useState(null);
+  const { colors: G } = useTenantConfig();
+
+  if (!empleado) return <AdminLogin G={G} onLogin={setEmpleado} />;
+
+  if (empleado.rol === "cocinero")
+    return <KDS empleado={empleado} onLogout={() => setEmpleado(null)} />;
+
+  // cajero y jefe comparten Dashboard; las pestañas se filtran por rol adentro
+  return <Dashboard empleado={empleado} onLogout={() => setEmpleado(null)} />;
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {  addDoc, serverTimestamp, getDoc, onSnapshot, doc, collection} from "firebase/firestore";
-import { useTenant, useIsClosedHours, TenantProvider } from "./TenantContext";
+import { useTenant, useTenantConfig, useIsClosedHours, TenantProvider } from "./TenantContext";
 
 
 // 
@@ -424,9 +424,9 @@ function MenuItem({ item, onAdd, disabled }) {
 
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <button onClick={()=>setQty(Math.max(1,qty-1))} style={qBtn}>−</button>
+              <button onClick={()=>setQty(Math.max(1,qty-1))} style={qBtn(G)}>−</button>
               <span style={{fontWeight:800,color:G.dark,minWidth:18,textAlign:"center"}}>{qty}</span>
-              <button onClick={()=>setQty(qty+1)} style={qBtn}>+</button>
+              <button onClick={()=>setQty(qty+1)} style={qBtn(G)}>+</button>
             </div>
             <div style={{textAlign:"center"}}>
               <p style={{color:G.textSub,fontSize:10,margin:0}}>TOTAL</p>
@@ -446,12 +446,12 @@ function MenuItem({ item, onAdd, disabled }) {
   );
 }
 
-const qBtn = {
+const qBtn = (G) => ({
   width:28,height:28,borderRadius:"50%",
   border:`1.5px solid ${G.divider}`,background:"#fff",
   color:G.dark,fontSize:16,cursor:"pointer",
   display:"flex",alignItems:"center",justifyContent:"center"
-};
+});
 
 // ── CartBar ──────────────────────────────────────────────────────────
 function CartBar({ count, total, onClick }) {
@@ -724,7 +724,7 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
                 <p style={{color:G.gold,fontWeight:900,fontSize:20,margin:0,
                   fontFamily:"Georgia,serif"}}>${subtotal}</p>
               </div>
-              <button id="btn-continuar-datos" onClick={()=>setStep(2)} style={nextBtn}>Continuar →</button>
+              <button id="btn-continuar-datos" onClick={()=>setStep(2)} style={nextBtn(G)}>Continuar →</button>
             </>
           )}
 
@@ -787,7 +787,7 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
               </div>
               <button id="btn-revisar-pedido"
                 onClick={()=>{if(canNext2)setStep(3);else alert("Completa todos los campos.");}}
-                style={{...nextBtn,marginTop:20,opacity:canNext2?1:.5}}>
+                style={{...nextBtn(G),marginTop:20,opacity:canNext2?1:.5}}>
                 Revisar pedido →
               </button>
             </>
@@ -830,14 +830,14 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
 
               <button id="btn-send-whatsapp"
                 onClick={()=>!disabled&&doSend("whatsapp")} disabled={sending||disabled} style={{
-                  ...nextBtn,background:G.green,marginTop:20,
+                  ...nextBtn(G),background:G.green,marginTop:20,
                   display:"flex",alignItems:"center",justifyContent:"center",gap:10,
                   opacity:(sending||disabled)?.7:1}}>
                 {sending?"Enviando...":(<><span style={{fontSize:18}}>💬</span> Enviar por WhatsApp</>)}
               </button>
               <button id="btn-send-only"
                 onClick={()=>!disabled&&doSend("only")} disabled={sending||disabled} style={{
-                  ...nextBtn,background:G.goldBg,marginTop:8,
+                  ...nextBtn(G),background:G.goldBg,marginTop:8,
                   display:"flex",alignItems:"center",justifyContent:"center",gap:10,
                   opacity:(sending||disabled)?.7:1}}>
                 {sending?"Registrando...":(<><span style={{fontSize:16}}>✅</span> Solo registrar pedido</>)}
@@ -855,14 +855,15 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
   );
 }
 
-const nextBtn = {
+const nextBtn = (G) => ({
   width:"100%",marginTop:16,padding:"13px",borderRadius:10,
   border:"none",background:G.gold,color:G.dark,fontWeight:900,fontSize:15,cursor:"pointer"
-};
+});
 
 // ── App ──────────────────────────────────────────────────────────────
 function App() {
   const { tenantId, colRef, pausado, horario, unlockAudio, playAddToCart, playOrderConfirmed } = useTenant();
+  const { loading: configLoading, isSuspended: tenantSuspended } = useTenantConfig();
   const isClosed = useIsClosedHours(horario);
   const isDisabled = isClosed || pausado;
   const [trackingOrderId, setTrackingOrderId] = useState(() => {
@@ -1020,6 +1021,30 @@ function App() {
     setSending(false);
   };
 
+
+  if (configLoading) return (
+    <div style={{ minHeight:"100vh", background:"#1C1208",
+      display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <p style={{ color:"#C9A84C", fontFamily:"Georgia,serif", fontSize:18 }}>
+        Cargando…
+      </p>
+    </div>
+  );
+
+  if (tenantSuspended) return (
+    <div style={{ minHeight:"100vh", background:"#1C1208",
+      display:"flex", flexDirection:"column",
+      alignItems:"center", justifyContent:"center", padding:24 }}>
+      <p style={{ fontSize:48, margin:"0 0 12px" }}>🚫</p>
+      <p style={{ color:"#e74c3c", fontFamily:"Georgia,serif",
+        fontSize:22, fontWeight:900, textAlign:"center" }}>
+        Servicio no disponible
+      </p>
+      <p style={{ color:"#888", fontSize:13, textAlign:"center" }}>
+        Este establecimiento no está activo en este momento.
+      </p>
+    </div>
+  );
 
   return (
     <div

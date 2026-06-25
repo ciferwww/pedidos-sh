@@ -15,6 +15,35 @@ const firebaseConfig = {
 };
 const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getFirestore(firebaseApp);
+
+// ── Paleta por defecto (fallback para todos los tenants) ─────────────
+export const G_DEFAULT = {
+  gold:      "#B8892A",
+  goldLight: "#C9A84C",
+  goldBg:    "#7a4f1e",
+  dark:      "#1C1208",
+  offWhite:  "#F5F1EA",
+  warmGray:  "#E8E2D8",
+  textMain:  "#1C1208",
+  textSub:   "#5a4a2a",
+  divider:   "#D4C4A0",
+  cardBg:    "#FDFAF4",
+  green:     "#25D366",
+};
+
+const DEFAULT_BRAND = {
+  nombre:   "Shekinah",
+  slogan:   "RESTAURANT · EL SABOR A GLORIA",
+  whatsapp: "526441234567",
+  logoUrl:  null,
+};
+
+const DEFAULT_CONFIG = {
+  colors:      G_DEFAULT,
+  brand:       DEFAULT_BRAND,
+  isSuspended: false,
+  loading:     true,
+};
 // ────────────────────────────────────────────────────────────────────
 
 /** Extrae el tenantId desde ?rest= en la URL, con fallback a "shekinah" */
@@ -37,6 +66,50 @@ export function TenantProvider({ children }) {
   // Operational state from Firestore
   const [pausado, setPausado] = useState(false);
   const [horario] = useState({ abre: "12:00", cierra: "23:30" });
+
+  // ── Configuración dinámica del tenant (branding + estado) ────────────
+const [tenantConfig, setTenantConfig] = useState(DEFAULT_CONFIG);
+
+useEffect(() => {
+  // Escucha el documento raíz del tenant: /tenants/{tenantId}
+  const tenantDocRef = doc(db, "tenants", tenantId);
+  const unsub = onSnapshot(
+    tenantDocRef,
+    (snap) => {
+      if (!snap.exists()) {
+        // El documento no existe → usar defaults, pero ya no está "loading"
+        setTenantConfig({ ...DEFAULT_CONFIG, loading: false });
+        return;
+      }
+      const data     = snap.data();
+      const branding = data.branding || {};
+
+      setTenantConfig({
+        loading:     false,
+        isSuspended: data.status === "suspendido",
+        brand: {
+          nombre:   data.nombre   || DEFAULT_BRAND.nombre,
+          slogan:   data.slogan   || DEFAULT_BRAND.slogan,
+          whatsapp: data.whatsapp || DEFAULT_BRAND.whatsapp,
+          logoUrl:  data.logoUrl  || null,
+        },
+        // Cada clave de G_DEFAULT puede ser sobreescrita desde Firestore;
+        // si no está, cae al valor por defecto.
+        colors: Object.fromEntries(
+          Object.keys(G_DEFAULT).map((key) => [
+            key,
+            branding[key] || G_DEFAULT[key],
+          ])
+        ),
+      });
+    },
+    () => {
+      // Error de permisos u offline → fallback silencioso
+      setTenantConfig({ ...DEFAULT_CONFIG, loading: false });
+    }
+  );
+  return unsub;
+}, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -131,6 +204,7 @@ export function TenantProvider({ children }) {
       tenantId, db, colRef, configDocRef,
       pausado, setPausa, horario,
       unlockAudio, playAddToCart, playOrderConfirmed, playNewOrderBeep,
+      tenantConfig,
     }}>
       {children}
     </TenantContext.Provider>
@@ -162,4 +236,32 @@ export function useIsClosedHours(horario) {
   }, [horario.abre, horario.cierra]);
 
   return isClosed;
+}
+
+// ── useTenantConfig ──────────────────────────────────────────────────
+/**
+ * Retorna { colors, brand, isSuspended, loading }
+ *
+ * colors   → objeto compatible con el actual `const G` (drop-in replacement)
+ * brand    → { nombre, slogan, whatsapp, logoUrl }
+ * isSuspended → true si el tenant está en status:"suspendido"
+ * loading  → true mientras se espera la primera respuesta de Firestore
+ *
+ * Estructura esperada en Firestore  /tenants/{tenantId}:
+ * {
+ *   status:   "activo" | "suspendido",
+ *   nombre:   "Mi Restaurante",
+ *   slogan:   "El mejor sabor",
+ *   whatsapp: "521234567890",
+ *   logoUrl:  "https://...",
+ *   branding: {
+ *     gold: "#B8892A", dark: "#1C1208", offWhite: "#F5F1EA",
+ *     // cualquier clave de G_DEFAULT es sobreescribible
+ *   }
+ * }
+ */
+export function useTenantConfig() {
+  const ctx = useContext(TenantContext);
+  if (!ctx) throw new Error("useTenantConfig debe usarse dentro de <TenantProvider>");
+  return ctx.tenantConfig;
 }
