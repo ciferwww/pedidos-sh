@@ -679,9 +679,9 @@ function POS({ onPedidoCreado, G }) {
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
-                  <button id={`pos-minus-${i}`} onClick={()=>changeQty(i,-1)} style={smallBtn}>−</button>
+                  <button id={`pos-minus-${i}`} onClick={()=>changeQty(i,-1)} style={smallBtn(G)}>−</button>
                   <span style={{fontWeight:800,fontSize:13,minWidth:18,textAlign:"center"}}>{item.cantidad}</span>
-                  <button id={`pos-plus-${i}`} onClick={()=>changeQty(i,1)} style={smallBtn}>+</button>
+                  <button id={`pos-plus-${i}`} onClick={()=>changeQty(i,1)} style={smallBtn(G)}>+</button>
                 </div>
                 <p style={{color:G.gold,fontWeight:900,fontSize:14,margin:0,fontFamily:"Georgia,serif"}}>
                   ${item.subtotal}</p>
@@ -733,11 +733,11 @@ function POS({ onPedidoCreado, G }) {
   );
 }
 
-const smallBtn={
+const smallBtn=(G)=>({
   width:22,height:22,borderRadius:"50%",border:`1px solid ${G.divider}`,
   background:"transparent",cursor:"pointer",fontSize:13,display:"flex",
   alignItems:"center",justifyContent:"center",fontWeight:700
-};
+});
 
 // ── Cierre del día ───────────────────────────────────────────────────
 function Cierre({ G }) {
