@@ -6,6 +6,8 @@ import {
 import { db, useTenant, useTenantConfig, TenantProvider } from "./TenantContext";
 import AdminLogin from "./AdminLogin";
 import KDS from "./KDS";
+import GestorMenu from "./GestorMenu";
+import DashboardGerencial from "./DashboardGerencial";
 
 // ─── Re-exportamos Admin envuelto en TenantProvider ──────────────────
 export default function AdminRoot() {
@@ -366,6 +368,7 @@ function POS({ onPedidoCreado, G }) {
   const [discount, setDiscount] = useState({ descuentoAplicado:0, tipoDescuento:"%", totalFinal:0 });
   const [editingPrice, setEditingPrice] = useState(null); // idx of cart item being price-edited
   const [editPriceVal, setEditPriceVal] = useState("");
+  const [showWAModal, setShowWAModal] = useState(false);
 
   const subtotal=cart.reduce((s,i)=>s+i.subtotal,0);
   const totalFinal = discount.descuentoAplicado > 0 ? discount.totalFinal : subtotal;
@@ -726,8 +729,292 @@ function POS({ onPedidoCreado, G }) {
               boxShadow:cart.length>0?`0 4px 20px ${G.gold}44`:"none",
               transition:"all .2s",letterSpacing:.5}}>
               {sending?"⏳ Registrando...":"✓ Cobrar y enviar a cocina"}</button>
+
+            {/* ── Registrar pedido de WhatsApp ── */}
+            <button
+              id="btn-open-wa-modal"
+              onClick={()=>setShowWAModal(true)}
+              style={{
+                width:"100%",marginTop:8,padding:"10px",borderRadius:9,
+                border:"1.5px solid #25D366",background:"#f0fff5",
+                color:"#1a7a40",fontWeight:800,fontSize:13,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+              }}>
+              💬 Registrar pedido de WhatsApp
+            </button>
           </div>
         </div>
+      </div>
+
+      {showWAModal && (
+        <WAPedidoModal
+          G={G}
+          onClose={()=>setShowWAModal(false)}
+          colRef={colRef}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── WAPedidoModal ────────────────────────────────────────────────────
+// El cajero usa este modal para registrar manualmente pedidos que llegaron
+// por WhatsApp (efectivo / transferencia / terminal) y ya fueron validados.
+function WAPedidoModal({ G, onClose, colRef }) {
+  const [nombre,   setNombre]   = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [entrega,  setEntrega]  = useState("recoger");
+  const [direccion,setDireccion]= useState("");
+  const [pago,     setPago]     = useState("efectivo");
+  const [mesa,     setMesa]     = useState("");
+  const [nota,     setNota]     = useState("");
+  // Carrito simplificado: texto libre por artículo + precio
+  const [lineas,   setLineas]   = useState([{ desc:"", precio:"" }]);
+  const [sending,  setSending]  = useState(false);
+  const [done,     setDone]     = useState(null);
+
+  const addLinea  = () => setLineas(p=>[...p,{desc:"",precio:""}]);
+  const remLinea  = (i) => setLineas(p=>p.filter((_,j)=>j!==i));
+  const setLinea  = (i,k,v) => setLineas(p=>p.map((l,j)=>j===i?{...l,[k]:v}:l));
+
+  const total = lineas.reduce((s,l)=>s+(parseFloat(l.precio)||0),0);
+
+  const registrar = async () => {
+    if (!nombre.trim()) { alert("Ingresa el nombre del cliente."); return; }
+    if (lineas.every(l=>!l.desc.trim())) { alert("Agrega al menos un artículo."); return; }
+    setSending(true);
+    const turno = generateTurno();
+    try {
+      await addDoc(colRef("pedidos"), {
+        nombre:   nombre.trim() || "Cliente WA",
+        telefono: telefono.trim(),
+        entrega,
+        direccion: entrega==="domicilio" ? direccion.trim() : "",
+        pago,
+        mesa: entrega==="recoger" ? mesa.trim() : "",
+        costoEnvio: 0,
+        articulos: lineas
+          .filter(l=>l.desc.trim())
+          .map(l=>({
+            nombre: l.desc.trim(),
+            cantidad: 1,
+            subtotal: parseFloat(l.precio)||0,
+            protein:"", salsa:"", bomba:false,
+            extras:[], platExtras:[],
+            nota: nota.trim(), alga: null, preparacion:"",
+          })),
+        total,
+        totalFinal: total,
+        subtotal: total,
+        descuentoAplicado: 0,
+        tipoDescuento: "%",
+        estado: "nuevo",
+        origen: "whatsapp",
+        creadoEn: serverTimestamp(),
+        turno,
+      });
+      setDone(turno);
+    } catch(e) {
+      console.error("[WAPedidoModal] error:", e);
+      alert("No se pudo registrar. Revisa la conexión.");
+    }
+    setSending(false);
+  };
+
+  const inputStyle = {
+    width:"100%", boxSizing:"border-box",
+    padding:"9px 12px", borderRadius:8,
+    border:`1.5px solid ${G.divider}`,
+    fontSize:13, fontFamily:"inherit",
+    background:"#fff", color:G.dark,
+  };
+
+  return (
+    <div style={{
+      position:"fixed",inset:0,background:"rgba(0,0,0,.65)",
+      zIndex:9998,display:"flex",alignItems:"flex-end",justifyContent:"center",
+    }}>
+      <div style={{
+        background:G.offWhite,
+        borderRadius:"20px 20px 0 0",
+        borderTop:`3px solid #25D366`,
+        width:"100%",maxWidth:520,
+        maxHeight:"90vh",display:"flex",flexDirection:"column",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding:"16px 20px 12px",
+          borderBottom:`1px solid ${G.divider}`,
+          display:"flex",alignItems:"center",justifyContent:"space-between",
+        }}>
+          <div>
+            <p style={{margin:0,fontWeight:900,color:"#1a7a40",fontSize:16}}>💬 Pedido de WhatsApp</p>
+            <p style={{margin:"2px 0 0",color:G.textSub,fontSize:11}}>
+              Registra manualmente — el cajero ya validó el pago.
+            </p>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:G.textSub}}>✕</button>
+        </div>
+
+        {done ? (
+          /* ── Confirmación ── */
+          <div style={{padding:"40px 24px",textAlign:"center"}}>
+            <p style={{fontSize:40,margin:"0 0 8px"}}>✅</p>
+            <p style={{color:"#1a7a40",fontWeight:900,fontSize:18,margin:"0 0 6px"}}>¡Pedido registrado!</p>
+            <p style={{color:G.textSub,fontSize:13,margin:"0 0 20px"}}>Ya está en cocina como turno:</p>
+            <div style={{background:G.dark,borderRadius:12,padding:"12px 20px",
+              border:`2px solid ${G.gold}`,display:"inline-block",marginBottom:24}}>
+              <p style={{color:G.goldLight,fontFamily:"Georgia,serif",
+                fontSize:32,fontWeight:900,margin:0,letterSpacing:3}}>#{done}</p>
+            </div>
+            <button onClick={onClose} style={{
+              display:"block",width:"100%",padding:"12px",borderRadius:10,border:"none",
+              background:G.gold,color:G.dark,fontWeight:900,fontSize:15,cursor:"pointer",
+            }}>Listo</button>
+          </div>
+        ) : (
+          /* ── Formulario ── */
+          <div style={{overflowY:"auto",padding:"16px 20px",flex:1,display:"flex",flexDirection:"column",gap:14}}>
+
+            {/* Cliente */}
+            <div>
+              <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 5px",letterSpacing:1}}>CLIENTE</p>
+              <div style={{display:"flex",gap:8}}>
+                <input
+                  id="wa-nombre"
+                  placeholder="Nombre"
+                  value={nombre}
+                  onChange={e=>setNombre(e.target.value)}
+                  style={{...inputStyle,flex:2}}
+                />
+                <input
+                  id="wa-telefono"
+                  placeholder="Teléfono (opcional)"
+                  value={telefono}
+                  onChange={e=>setTelefono(e.target.value)}
+                  style={{...inputStyle,flex:1}}
+                  type="tel"
+                />
+              </div>
+            </div>
+
+            {/* Entrega */}
+            <div>
+              <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 5px",letterSpacing:1}}>ENTREGA</p>
+              <div style={{display:"flex",gap:6}}>
+                {[{val:"recoger",label:"🏪 Recoger"},{val:"domicilio",label:"🛵 Domicilio"}].map(o=>(
+                  <button key={o.val} onClick={()=>setEntrega(o.val)} style={{
+                    flex:1,padding:"7px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,
+                    border:`1.5px solid ${entrega===o.val?G.gold:G.divider}`,
+                    background:entrega===o.val?`${G.gold}18`:"transparent",
+                    color:entrega===o.val?G.gold:G.textSub,
+                  }}>{o.label}</button>
+                ))}
+              </div>
+              {entrega==="recoger" && (
+                <input
+                  id="wa-mesa"
+                  placeholder="Mesa (opcional)"
+                  value={mesa}
+                  onChange={e=>setMesa(e.target.value)}
+                  style={{...inputStyle,marginTop:6}}
+                />
+              )}
+              {entrega==="domicilio" && (
+                <input
+                  id="wa-direccion"
+                  placeholder="Dirección"
+                  value={direccion}
+                  onChange={e=>setDireccion(e.target.value)}
+                  style={{...inputStyle,marginTop:6}}
+                />
+              )}
+            </div>
+
+            {/* Pago */}
+            <div>
+              <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 5px",letterSpacing:1}}>PAGO VALIDADO</p>
+              <div style={{display:"flex",gap:5}}>
+                {[{val:"efectivo",label:"💵 Efectivo"},{val:"transferencia",label:"📲 Transf."},{val:"terminal",label:"💳 Terminal"}].map(o=>(
+                  <button key={o.val} onClick={()=>setPago(o.val)} style={{
+                    flex:1,padding:"7px 4px",borderRadius:8,cursor:"pointer",fontWeight:800,fontSize:11,
+                    border:`1.5px solid ${pago===o.val?G.gold:G.divider}`,
+                    background:pago===o.val?G.gold:"transparent",
+                    color:pago===o.val?G.dark:G.textSub,
+                  }}>{o.label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Artículos */}
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:0,letterSpacing:1}}>ARTÍCULOS</p>
+                <button onClick={addLinea} style={{
+                  background:G.gold,border:"none",borderRadius:6,padding:"3px 10px",
+                  color:G.dark,fontWeight:800,fontSize:11,cursor:"pointer",
+                }}>+ Agregar</button>
+              </div>
+              {lineas.map((l,i)=>(
+                <div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
+                  <input
+                    id={`wa-linea-desc-${i}`}
+                    placeholder="Descripción (ej. Shekinah roll × 2)"
+                    value={l.desc}
+                    onChange={e=>setLinea(i,"desc",e.target.value)}
+                    style={{...inputStyle,flex:3}}
+                  />
+                  <input
+                    id={`wa-linea-precio-${i}`}
+                    type="number" min="0"
+                    placeholder="$"
+                    value={l.precio}
+                    onChange={e=>setLinea(i,"precio",e.target.value)}
+                    style={{...inputStyle,flex:1,fontFamily:"Georgia,serif",fontWeight:900}}
+                  />
+                  {lineas.length>1 && (
+                    <button onClick={()=>remLinea(i)} style={{
+                      background:"none",border:"none",color:"#c0392b",
+                      fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0,
+                    }}>✕</button>
+                  )}
+                </div>
+              ))}
+              <div style={{display:"flex",justifyContent:"space-between",
+                background:"#f5f1e8",borderRadius:8,padding:"8px 12px",marginTop:4}}>
+                <span style={{color:G.textSub,fontSize:13,fontWeight:700}}>Total</span>
+                <span style={{color:G.gold,fontWeight:900,fontSize:17,
+                  fontFamily:"Georgia,serif"}}>${total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Nota general */}
+            <div>
+              <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 5px",letterSpacing:1}}>NOTA (opcional)</p>
+              <textarea
+                id="wa-nota"
+                value={nota}
+                onChange={e=>setNota(e.target.value)}
+                rows={2}
+                placeholder="Instrucciones especiales, domicilio exacto…"
+                style={{...inputStyle,resize:"none"}}
+              />
+            </div>
+
+            <button
+              id="btn-registrar-wa"
+              onClick={registrar}
+              disabled={sending}
+              style={{
+                padding:"13px",borderRadius:10,border:"none",
+                background: sending?"#aaa":"#25D366",
+                color:"#fff",fontWeight:900,fontSize:15,cursor:sending?"not-allowed":"pointer",
+                opacity:sending?.7:1,
+              }}>
+              {sending?"⏳ Registrando…":"✅ Registrar y enviar a cocina"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -957,17 +1244,7 @@ function Config({ G }) {
   );
 }
 
-// ── DashboardGerencial (placeholder — se construye en PROMPT 3) ───────
-function DashboardGerencial() {
-  return (
-    <div style={{padding:"40px 20px",textAlign:"center"}}>
-      <p style={{fontSize:36,margin:"0 0 8px"}}>📈</p>
-      <p style={{color:"#5a4a2a",fontWeight:700}}>
-        Dashboard Gerencial — gráficos de ganancias y platillos top próximamente.
-      </p>
-    </div>
-  );
-}
+// ── DashboardGerencial importado desde ./DashboardGerencial.jsx ──────
 
 // ── Dashboard ─────────────────────────────────────────────────────────
 function Dashboard({ empleado, onLogout }) {
@@ -1007,6 +1284,7 @@ function Dashboard({ empleado, onLogout }) {
     {key:"pedidos", label:"📋 Pedidos",            roles:["jefe","cajero"]},
     {key:"pos",     label:"🏪 Punto de Venta",     roles:["jefe","cajero"]},
     {key:"cierre",  label:"📊 Cierre del día",      roles:["jefe"]},
+    {key:"menu",    label:"🍽️ Menú",               roles:["jefe"]},
     {key:"config",  label:"⚙️ Config",              roles:["jefe"]},
     {key:"dash",    label:"📈 Dashboard Gerencial", roles:["jefe"]},
   ];
@@ -1077,6 +1355,7 @@ function Dashboard({ empleado, onLogout }) {
       {/* Content */}
       {tab==="pos"&&<POS G={G} />}
       {tab==="cierre"&&<Cierre G={G} />}
+      {tab==="menu"&&<GestorMenu />}
       {tab==="config"&&<Config G={G} />}
       {tab==="dash"&&<DashboardGerencial />}
       {tab==="pedidos"&&(

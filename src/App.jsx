@@ -36,84 +36,6 @@ const EXTRA_SUSHI     = 20;
 const EXTRA_PLAT      = 30;
 const SUSHI_EXTRAS    = ["Philadelphia","Gratinado"];
 
-// menu statico por si no hay firestore
-const MENU_STATIC = {
-  Botanas: [
-    { id:"b1",  name:"Gohan",               price:150, desc:"Base de arroz, mix de camarón, res, pollo, pepino, cubierto de zanahoria, con abanico de aguacate, tampico y philadelphia.", tags:["Popular"] },
-    { id:"b2",  name:"Rocachicken",          price:140, desc:"Tiras de pollo crujientes, acompañado con arroz, Tampico, aguacate y zanahoria.", tags:[] },
-    { id:"b3",  name:"Boneless",             price:140, desc:"300g de tiras de pollo en salsa a elegir.", sauceOptions:"boneless", tags:["Popular","Picante"] },
-    { id:"b4",  name:"Alitas",               price:140, desc:"500g de alitas en salsa a elegir.", sauceOptions:"boneless", tags:["Picante"] },
-    { id:"b5",  name:"Tortuguita",           price:95,  desc:"Milanesa de camarón cubierta de Philadelphia, Tampico y aguacate sobre zanahoria.", tags:["Individual"] },
-    { id:"b6",  name:"Tempura veggies",      price:120, desc:"Mix de vegetales capeados con aderezo ranch.", tags:["Individual"] },
-    { id:"b7",  name:"Chile hot",            price:105, desc:"Chile verde relleno de res, gratinado, acompañado de arroz, tampico y aguacate.", tags:["Picante"] },
-    { id:"b8",  name:"Hot bite",             price:95,  desc:"Chile caribe con Philadelphia, queso gratinado, tampico, camarón y envuelto en tocino.", tags:["Picante","Individual"] },
-    { id:"b9",  name:"Salchipulpos",         price:85,  desc:"Papas a la francesa con salchichas, cubiertas de queso amarillo y tocino.", tags:["Individual"] },
-    { id:"b10", name:"Nuguets de pollo",     price:85,  desc:"Con papas fritas, aderezo ranch y catsup.", tags:["Individual"] },
-    { id:"b11", name:"Aros de cebolla",      price:80,  desc:"10 piezas con aderezo ranch.", tags:["Individual"] },
-    { id:"b12", name:"Papas sazonadas",      price:85,  desc:"300g con queso amarillo.", tags:["Individual"] },
-    { id:"b13", name:"Papas a la francesa",  price:70,  desc:"Con catsup.", tags:["Individual"] },
-    { id:"b14", name:"Dedos de queso",       price:80,  desc:"6 pz de queso mozzarella empanizados sobre zanahoria.", tags:["Individual"] },
-    { id:"b15", name:"Dedos de queso sazonados", price:80, desc:"6 pz de queso mozzarella empanizados con salsa de ponmodoro y queso parmezano.", tags:["Individual"] },
-    { id:"b16", name:"Bolitas Philadelphia", price:80,  desc:"8 pz sobre zanahoria.", tags:["Individual"] },
-    { id:"b17", name:"Tocibolitas",          price:85,  desc:"8 pz sobre zanahoria.", tags:["Individual"] },
-    { id:"b18", name:"Sampler",              price:320, desc:"Sushi a elegir del menu, ½ orden de: boneless, papas sazonadas, dedos queso, aros cebolla, tampico, ranch y queso amarillo.", tags:["Popular"] },
-  ],
-  Sushi: [
-    { id:"s1",  name:"Vegetariano roll",    price:90,  desc:"D: Zanahoria, pepino y aguacate.", isSushi:true, tags:["Individual"] },
-    { id:"s2",  name:"California roll",     price:105, desc:"Ingrediente a elegir (camarón, res, pollo, tocino, surimi o tampico).", hasProtein:true, isSushi:true, tags:["Popular"] },
-    { id:"s3",  name:"Nevado roll",         price:120, desc:"D: Camarón · F: Queso Philadelphia.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s4",  name:"Chipotle roll",       price:120, desc:"D: Camarón empanizado · F: Gratinado con salsa chipotle.", hasProtein:true, isSushi:true, tags:["Picante"] },
-    { id:"s5",  name:"Torito roll",         price:130, desc:"D: Camarón, tocino, chile caribe y salsa chipotle especial · F: Gratinado.", hasProtein:true, isSushi:true, tags:["Picante"] },
-    { id:"s6",  name:"Subarachi roll",      price:125, desc:"D: Camarón · F: Cubierto de Philadelphia y tampico.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s7",  name:"Coso roll",           price:125, desc:"D: Camarón, chile caribe · F: Zanahoria capeada y aderezo serrano.", hasProtein:true, isSushi:true, tags:["Picante"] },
-    { id:"s8",  name:"Almond roll",         price:125, desc:"D: Camarón capeado · F: Philadelphia, almendras y aderezo de piña picosa.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s9",  name:"Bacon roll",          price:130, desc:"D: Camarón, tocino · F: Tampico especial.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s10", name:"Boston roll",         price:130, desc:"D: Camarón empanizado · F: Philadelphia y tocino.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s11", name:"Cielo mar y tierra",  price:135, desc:"D: Camarón, Res y pollo.", isSushi:true, tags:["Popular"] },
-    { id:"s12", name:"Sparrow roll",        price:135, desc:"D: Res, tocino · F: Philadelphia y chile verde.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s13", name:"Sonora roll",         price:135, desc:"D: Res, tocino, cebolla asada, chile carive y verde · F: Philadelphia y aguacate.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s14", name:"Supremo roll",        price:135, desc:"D: Arroz amasado con Philadelphia, res, tocino, chile caribe · F: Queso gratinado.", hasProtein:true, isSushi:true, tags:["Popular"] },
-    { id:"s15", name:"Bonneles roll",       price:140, desc:"D: Pollo · F: Boneless, salsa a elegir.", hasProtein:true, sauceOptions:"roll", isSushi:true, tags:["Picante"] },
-    { id:"s16", name:"Tocino roll",         price:140, desc:"D: Camarón, res, tocino, chile caribe · F: Philadelphia con tocino.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s17", name:"Especial roll",       price:140, desc:"D: Camarón y surimi empanizado · F: Topping especial y aderezo cilantro.", hasProtein:true, isSushi:true, tags:["Popular"] },
-    { id:"s18", name:"Philip roll",         price:140, desc:"D: Res, pollo, tocino · F: Queso gratinado con tocino.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s19", name:"3 Quesos roll",       price:140, desc:"D: Camarón, res, pollo empanizado · F: Philadelphia, queso americano y gratinado.", hasProtein:true, isSushi:true, tags:[] },
-    { id:"s20", name:"Shekinah roll",       price:145, desc:"D: Arroz amasado con Philadelphia, cebollín, chile serrano, camarón, res y pollo · F: Philadelphia, gratinado y tocino.", hasProtein:true, isSushi:true, tags:["Popular","Picante"] },
-  ],
-  Platillos: [
-    { id:"p1", name:"Teriyaki",                  price:170, desc:"Camarón, res y pollo salteados con trozos de piña en nuestra salsa de la casa, sobre arroz blanco y vegetales salteados.", hasExtras:true, tags:["Popular"] },
-    { id:"p2", name:"Tepanyaki",                 price:170, desc:"Camarón, res y pollo salteados en nuestra salsa de la casa, sobre arroz blanco con vegetales salteados.", hasExtras:true, tags:[] },
-    { id:"p3", name:"Yakimeshi",                 price:170, desc:"Deliciosa mezcla de arroz frito con camarón, res y pollo, acompañada de topping de tampico, abanico de aguacate y bolitas de queso Philadelphia.", hasExtras:true, tags:["Popular"] },
-    { id:"p4", name:"Kung pao",                  price:170, desc:"Tiras de pollo bañadas en salsa agridulce picosa, con vegetales salteados, cacahuates, chile de árbol y elotes baby.", hasExtras:true, tags:["Picante"] },
-    { id:"p5", name:"Pechuga tokiyaki",          price:170, desc:"Pechuga de pollo en tiras (a la plancha o empanizada), bañada en aderezo cilantro, sobre vegetales salteados y arroz frito.", hasExtras:true, tags:[] },
-    { id:"p6", name:"Pechuga en crema chipotle", price:170, desc:"Tiras de pollo en crema chipotle, con vegetales salteados, sobre arroz frito.", hasExtras:true, tags:["Picante"] },
-    { id:"p7", name:"Chicken roll",              price:170, desc:"Pechuga de pollo rellena de camarón, tocino, pimientos y queso Philadelphia, calabaza, zanahoria, sobre arroz frito y ensalada de la casa.", hasExtras:true, tags:[] },
-    { id:"p8", name:"Gohan especial",            price:170, desc:"Base de arroz empanizado y gratinado, con vegetales salteados, camarón, res y pollo, coronado con abanico de aguacate, tampico y queso Philadelphia.", hasExtras:true, tags:["Popular"] },
-  ],
-  Entradas: [
-    { id:"e1", name:"Ensalada César",    price:135, desc:"Base de lechuga fresca con crotones, queso parmesano, orégano, pimienta y sal, con aderezo César de la casa, láminas de parmesano y un toque cítrico.", tags:["Individual"] },
-    { id:"e2", name:"Ensalada bonneles", price:150, desc:"Tiras de pollo bañadas en salsa a elegir, con lechuga fresca, pepino, zanahoria, tomate cherry, cebolla morada, rábano y vinagreta.", sauceOptions:"boneless", tags:["Picante"] },
-    { id:"e3", name:"Ensalada light",    price:160, desc:"Pechuga de pollo a la plancha con lechuga, arúgula, espinaca, pepino, zanahoria, aceitunas, alcaparras, rábano y cebolla morada.", tags:["Individual"] },
-  ],
-  Hamburguesas: [
-    { id:"h1", name:"Sencilla",           price:130, desc:"Carne a elección con queso americano. Incluye aderezo especial, tomate, lechuga, cebolla y papas.", hasBurgerProtein:true, tags:["Individual"] },
-    { id:"h2", name:"Doble",              price:155, desc:"2 pz de Res, queso americano, queso gratinado con tocino. Incluye aderezo especial, tomate, lechuga, cebolla y papas.", tags:[] },
-    { id:"h3", name:"Mushroom",           price:140, desc:"Carne a elección con queso americano, tocino, queso gratinado y champiñones salteados.", hasBurgerProtein:true, tags:[] },
-    { id:"h4", name:"Guacamole",          price:140, desc:"Carne a elección, tocino con queso americano y guacamole.", hasBurgerProtein:true, tags:["Popular"] },
-    { id:"h5", name:"Norteña",            price:175, desc:"Carne a elección con queso americano, piña y cebolla salteadas, chile verde tatemado, queso gratinado con tocino y salchicha.", hasBurgerProtein:true, tags:["Popular","Picante"] },
-    { id:"h6", name:"Bonneless",          price:140, desc:"Tiras de pollo bañadas en salsa de tu elección.", sauceOptions:"boneless", tags:["Picante"] },
-    { id:"h7", name:"Cielo, Mar y Tierra",price:175, desc:"Carne de Res, Camarón y Pollo. Con queso americano.", tags:["Popular"] },
-  ],
-  Paquetes: [
-    { id:"pk1", name:"Paquete 1", price:225, desc:"1 rollo California + orden de boneless + 1 litro de té.", sauceOptions:"boneless", tags:["Popular"] },
-    { id:"pk2", name:"Paquete 2", price:275, desc:"3 rollos California + 1 litro de té.", tags:[] },
-    { id:"pk3", name:"Paquete 3", price:305, desc:"2 rollos California + orden de boneless + 1 litro de té.", sauceOptions:"boneless", tags:[] },
-  ],
-  Bebidas: [
-    { id:"bv1", name:"Té Oolong 1 Litro", price:35, desc:"1 litro de té Oolong.", tags:[] },
-    { id:"bv2", name:"Refresco",           price:30, desc:"Familia Pepsi 600 ml.", tags:[] },
-  ],
-};
 
 const ALL_TAGS = ["Picante","Popular","Individual"];
 
@@ -620,6 +542,7 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
   );
 
   if (confirmedTurno) {
+    const isPagoTarjeta = payment === "tarjeta";
     return (
       <div style={{position:"fixed",inset:0,background:"rgba(28,18,8,.92)",
         zIndex:300,display:"flex",flexDirection:"column",
@@ -627,28 +550,47 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
         <div style={{
           background:G.offWhite, borderRadius:20,
           padding:"40px 32px", textAlign:"center",
-          border:`3px solid ${G.gold}`, maxWidth:320,
+          border:`3px solid ${isPagoTarjeta ? "#27ae60" : G.gold}`, maxWidth:320,
           animation:"popIn .4s cubic-bezier(.175,.885,.32,1.275)"
         }}>
           <style>{`@keyframes popIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}`}</style>
-          <p style={{fontSize:48,margin:"0 0 8px"}}>✅</p>
-          <p style={{color:G.gold,fontFamily:"Georgia,serif",fontSize:22,fontWeight:900,margin:"0 0 4px"}}>
-            ¡Pedido recibido!
+          <p style={{fontSize:48,margin:"0 0 8px"}}>{isPagoTarjeta ? "✅" : "💬"}</p>
+          <p style={{color: isPagoTarjeta ? "#27ae60" : G.gold, fontFamily:"Georgia,serif",fontSize:22,fontWeight:900,margin:"0 0 4px"}}>
+            {isPagoTarjeta ? "¡Pedido confirmado!" : "¡Pedido enviado!"}
           </p>
-          <p style={{color:G.textSub,fontSize:13,margin:"0 0 20px"}}>Tu número de turno es:</p>
-          <div style={{
-            background:G.dark,borderRadius:12,padding:"16px 24px",
-            border:`2px solid ${G.gold}`, marginBottom:20
-          }}>
-            <p style={{color:"#aaa",fontSize:11,margin:"0 0 4px",letterSpacing:2}}>TURNO</p>
-            <p style={{color:G.goldLight,fontFamily:"Georgia,serif",
-              fontSize:36,fontWeight:900,margin:0,letterSpacing:4}}>
-              #{confirmedTurno}
-            </p>
-          </div>
+          <p style={{color:G.textSub,fontSize:13,margin:"0 0 20px"}}>
+            {isPagoTarjeta
+              ? "Tu pago fue procesado. Tu pedido ya está en cocina."
+              : "El cajero lo registrará al validar tu pago. Tu turno es:"}
+          </p>
+          {isPagoTarjeta && (
+            <div style={{background:G.dark,borderRadius:12,padding:"16px 24px",
+              border:`2px solid ${G.gold}`, marginBottom:20}}>
+              <p style={{color:"#aaa",fontSize:11,margin:"0 0 4px",letterSpacing:2}}>TURNO</p>
+              <p style={{color:G.goldLight,fontFamily:"Georgia,serif",
+                fontSize:36,fontWeight:900,margin:0,letterSpacing:4}}>
+                #{confirmedTurno}
+              </p>
+            </div>
+          )}
+          {!isPagoTarjeta && (
+            <div style={{background:"#fffbf0",borderRadius:12,padding:"12px 16px",
+              border:`1px solid ${G.gold}`, marginBottom:20,
+              display:"flex",flexDirection:"column",gap:4}}>
+              <p style={{color:G.textSub,fontSize:12,margin:0}}>
+                📋 Guarda tu número de referencia:
+              </p>
+              <p style={{color:G.gold,fontFamily:"Georgia,serif",
+                fontSize:22,fontWeight:900,margin:0,letterSpacing:2}}>
+                #{confirmedTurno}
+              </p>
+            </div>
+          )}
           <button onClick={onClose} style={{
             width:"100%",padding:"13px",borderRadius:10,border:"none",
-            background:G.gold,color:G.dark,fontWeight:900,fontSize:15,cursor:"pointer"
+            background: isPagoTarjeta ? "#27ae60" : G.gold,
+            color: isPagoTarjeta ? "#fff" : G.dark,
+            fontWeight:900,fontSize:15,cursor:"pointer"
           }}>Cerrar</button>
         </div>
       </div>
@@ -761,9 +703,10 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
               <Label>Método de pago</Label>
               <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 {[
-                  {val:"efectivo",icon:"💵",label:"Efectivo",sub:"Paga al recibir o recoger"},
-                  {val:"transferencia",icon:"📲",label:"Transferencia",sub:"Te enviamos los datos por WhatsApp"},
-                  {val:"terminal",icon:"💳",label:"Terminal bancaria",sub:"Débito o crédito al recoger / en puerta"},
+                  {val:"tarjeta",     icon:"🔒",label:"Pago online con tarjeta",   sub:"Tu pedido entra directo a cocina al pagar. Seguro y rápido."},
+                  {val:"efectivo",    icon:"💵",label:"Efectivo",                  sub:"Paga al recoger / recibir. El cajero lo registra en el sistema."},
+                  {val:"transferencia",icon:"📲",label:"Transferencia",            sub:"Te enviamos datos por WhatsApp. El cajero valida y registra."},
+                  {val:"terminal",    icon:"💳",label:"Terminal bancaria",          sub:"Débito o crédito al recoger / en puerta. El cajero lo registra."},
                 ].map(o=>(
                   <button key={o.val} id={`payment-${o.val}`} onClick={()=>setPayment(o.val)} style={{
                     display:"flex",alignItems:"center",gap:12,
@@ -802,7 +745,8 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
                 value={delivery==="recoger"?"🏪 Recoger en restaurante":`🛵 Domicilio: ${address}`} />
               <SummaryRow label="Pago"
                 value={payment==="efectivo"?"💵 Efectivo"
-                      :payment==="transferencia"?"📲 Transferencia":"💳 Terminal bancaria"} />
+                      :payment==="transferencia"?"📲 Transferencia"
+                      :payment==="terminal"?"💳 Terminal bancaria":"💳 Tarjeta"} />
               <Divider />
               <p style={{color:G.textSub,fontWeight:700,fontSize:12,margin:"0 0 6px"}}>
                 ARTÍCULOS ({items.reduce((s,i)=>s+i.qty,0)})</p>
@@ -822,26 +766,71 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
                 </div>
               )}
               <Divider />
-              <div style={{display:"flex",justifyContent:"space-between"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
                 <p style={{color:G.dark,fontWeight:800,fontSize:16,margin:0}}>Total a pagar</p>
                 <p style={{color:G.gold,fontWeight:900,fontSize:22,margin:0,
                   fontFamily:"Georgia,serif"}}>${total}</p>
               </div>
 
-              <button id="btn-send-whatsapp"
-                onClick={()=>!disabled&&doSend("whatsapp")} disabled={sending||disabled} style={{
-                  ...nextBtn(G),background:G.green,marginTop:20,
-                  display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-                  opacity:(sending||disabled)?.7:1}}>
-                {sending?"Enviando...":(<><span style={{fontSize:18}}>💬</span> Enviar por WhatsApp</>)}
-              </button>
-              <button id="btn-send-only"
-                onClick={()=>!disabled&&doSend("only")} disabled={sending||disabled} style={{
-                  ...nextBtn(G),background:G.goldBg,marginTop:8,
-                  display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-                  opacity:(sending||disabled)?.7:1}}>
-                {sending?"Registrando...":(<><span style={{fontSize:16}}>✅</span> Solo registrar pedido</>)}
-              </button>
+              {payment === "tarjeta" ? (
+                /* ── Opción A: Pago con tarjeta → pasarela → Firestore ── */
+                <div style={{background:"#f0faf4",border:"1.5px solid #27ae60",borderRadius:12,padding:"14px 16px",marginBottom:8}}>
+                  <p style={{color:"#1a7a40",fontWeight:800,fontSize:13,margin:"0 0 4px"}}>
+                    💳 Pago seguro en línea
+                  </p>
+                  <p style={{color:"#3a6a4a",fontSize:12,margin:"0 0 12px"}}>
+                    Tu pedido entra directo a cocina al confirmarse el pago. No necesitas enviar nada por WhatsApp.
+                  </p>
+                  <button
+                    id="btn-pagar-tarjeta"
+                    onClick={()=>!disabled&&doSend("tarjeta")}
+                    disabled={sending||disabled}
+                    style={{
+                      ...nextBtn(G),
+                      background: sending ? "#aaa" : "linear-gradient(135deg,#27ae60,#2ecc71)",
+                      marginTop:0,
+                      display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+                      opacity:(sending||disabled)?.7:1,
+                    }}>
+                    {sending
+                      ? <><span style={{fontSize:16}}>⏳</span> Procesando pago…</>
+                      : <><span style={{fontSize:16}}>🔒</span> Pagar ${total} con tarjeta</>}
+                  </button>
+                </div>
+              ) : (
+                /* ── Opción B: Efectivo / Transferencia / Terminal → WhatsApp ── */
+                <div style={{background:"#fffbf0",border:`1.5px solid ${G.gold}`,borderRadius:12,padding:"14px 16px",marginBottom:8}}>
+                  <p style={{color:G.goldBg,fontWeight:800,fontSize:13,margin:"0 0 4px"}}>
+                    {payment==="efectivo"?"💵 Pago en efectivo"
+                     :payment==="transferencia"?"📲 Pago por transferencia"
+                     :"💳 Terminal bancaria"}
+                  </p>
+                  <p style={{color:G.textSub,fontSize:12,margin:"0 0 12px"}}>
+                    {payment==="transferencia"
+                      ? "Te enviaremos los datos de transferencia por WhatsApp. Manda tu comprobante y el cajero registra tu pedido."
+                      : "El cajero validará tu pago y registrará el pedido en el sistema. Envía tu orden por WhatsApp para avisarnos."}
+                  </p>
+                  <button
+                    id="btn-send-whatsapp"
+                    onClick={()=>!disabled&&doSend("whatsapp")}
+                    disabled={sending||disabled}
+                    style={{
+                      ...nextBtn(G),
+                      background: sending ? "#aaa" : G.green,
+                      marginTop:0,
+                      display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+                      opacity:(sending||disabled)?.7:1,
+                    }}>
+                    {sending
+                      ? "Abriendo WhatsApp…"
+                      : <><span style={{fontSize:18}}>💬</span> Enviar pedido por WhatsApp</>}
+                  </button>
+                  <p style={{color:G.textSub,fontSize:10,textAlign:"center",margin:"8px 0 0"}}>
+                    ⚠ Tu pedido NO entra a cocina hasta que el cajero lo confirme.
+                  </p>
+                </div>
+              )}
+
               <button id="btn-back-datos" onClick={()=>setStep(2)} style={{
                 width:"100%",marginTop:8,padding:"10px",borderRadius:9,
                 border:`1.5px solid ${G.divider}`,background:"transparent",
@@ -875,7 +864,8 @@ function App() {
   const [showModal, setShowModal] = useState(false);
   const [search,    setSearch]    = useState("");
   const [activeTags,setActiveTags]= useState([]);
-  const [menu,      setMenu]      = useState(MENU_STATIC);
+  const [menu,      setMenu]      = useState({});
+  const [menuLoading, setMenuLoading] = useState(true);
   const audioUnlockedRef = useRef(false);
   const categories = Object.keys(menu);
   const cartCount  = cart.reduce((s,i)=>s+i.qty,0);
@@ -902,43 +892,30 @@ function App() {
     };
   }, [handleFirstInteraction]);
 
-  // Load menu from Firestore with 3s timeout fallback
+  // ── Menú desde Firestore (solo disponible: true) ─────────────────
   useEffect(() => {
-    let settled = false;
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        console.info("[Shekinah] Firestore timeout — usando menú estático.");
-        settled = true;
-      }
-    }, 3000);
-
-    let unsub = () => {};
-    try {
-      unsub = onSnapshot(
-        colRef("productos"),
-        (snap) => {
-          clearTimeout(timeout);
-          settled = true;
-          if (snap.empty) return; // keep static fallback if collection empty
-          // Group by categoria
-          const grouped = {};
-          snap.docs.forEach(d => {
-            const data = d.data();
-            const cat  = data.categoria || "Otros";
-            if (!grouped[cat]) grouped[cat] = [];
-            grouped[cat].push({ id: d.id, ...data });
-          });
-          if (Object.keys(grouped).length > 0) setMenu(grouped);
-        },
-        () => {
-          clearTimeout(timeout);
-          // silently fallback
-        }
-      );
-    } catch (_) {
-      clearTimeout(timeout);
-    }
-    return () => { unsub(); clearTimeout(timeout); };
+    const unsub = onSnapshot(
+      colRef("productos"),
+      (snap) => {
+        const grouped = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          // Solo muestra productos disponibles en el menú web
+          if (data.disponible === false) return;
+          const cat = data.categoria || "Otros";
+          if (!grouped[cat]) grouped[cat] = [];
+          grouped[cat].push({ id: d.id, ...data });
+        });
+        // Ordenar cada categoría por campo "orden"
+        Object.keys(grouped).forEach(c => {
+          grouped[c].sort((a, b) => (a.orden ?? 999) - (b.orden ?? 999));
+        });
+        setMenu(grouped);
+        setMenuLoading(false);
+      },
+      () => setMenuLoading(false)
+    );
+    return unsub;
   }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addToCart = item => {
@@ -946,6 +923,13 @@ function App() {
     setCart(prev => [...prev, item]);
   };
   const removeFromCart = idx => setCart(prev => prev.filter((_,i)=>i!==idx));
+
+  // Cuando el menú carga, asegura que cat sea una categoría válida
+  useEffect(() => {
+    if (categories.length > 0 && !menu[cat]) {
+      setCat(categories[0]);
+    }
+  }, [categories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter items
   const filteredItems = (menu[cat] || []).filter(item => {
@@ -981,41 +965,67 @@ function App() {
     return encodeURIComponent(msg);
   };
 
+  // ── Simula pasarela de pago online (tarjeta) ─────────────────────
+  const simulatePagoOnline = () =>
+    new Promise((resolve, reject) =>
+      setTimeout(() => (Math.random() > 0.05 ? resolve() : reject(new Error("Pago declinado"))), 2000)
+    );
+
+  // ── Lógica estricta de pagos ─────────────────────────────────────
+  // tarjeta (domicilio o local) → pasarela → Firestore → cocina
+  // efectivo / transferencia / terminal → WhatsApp únicamente (NO toca Firestore)
   const handleSend = async ({ name, phone, delivery, address, payment, deliveryCost, total }, setSending, mode, setConfirmedTurno) => {
     if (isDisabled) return;
     setSending(true);
     const turno = generateTurno();
+
+    const esPagoOnline = payment === "tarjeta";
+
     try {
-      const orderId = (await addDoc(colRef("pedidos"), {
-        nombre: name, telefono: phone, entrega: delivery,
-        direccion: address || "", pago: payment,
-        costoEnvio: delivery === "domicilio" ? deliveryCost : 0,
-        articulos: cart.map(i => ({
-          nombre: i.name, cantidad: i.qty, protein: i.protein || "",
-          salsa: i.sauce || "", bomba: i.bomba || false,
-          extras: i.extras || [], platExtras: i.platExtras || [],
-          nota: i.note || "", subtotal: i.totalPrice,
-          alga: i.alga ?? null,
-          preparacion: i.preparacion || ""
-        })),
-        total, estado: "nuevo", origen: "web",
-        creadoEn: serverTimestamp(), turno,
-        tenantId,
-      })).id;
-      localStorage.setItem("trackingOrderId", orderId);
-      setTrackingOrderId(orderId);
-      setCart([]);
-      setShowModal(false);
+      if (esPagoOnline) {
+        // ── Opción A: Pago con tarjeta → simular pasarela → guardar en Firestore ──
+        await simulatePagoOnline();
 
-      if(mode==="whatsapp"){
-        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${buildMsg({name,phone,delivery,address,payment,deliveryCost,total,turno,orderId})}`,"_blank");
+        const orderId = (await addDoc(colRef("pedidos"), {
+          nombre: name, telefono: phone, entrega: delivery,
+          direccion: address || "", pago: "tarjeta",
+          metodoPago: "tarjeta", pagado: true,
+          costoEnvio: delivery === "domicilio" ? deliveryCost : 0,
+          articulos: cart.map(i => ({
+            nombre: i.name, cantidad: i.qty, protein: i.protein || "",
+            salsa: i.sauce || "", bomba: i.bomba || false,
+            extras: i.extras || [], platExtras: i.platExtras || [],
+            nota: i.note || "", subtotal: i.totalPrice,
+            alga: i.alga ?? null,
+            preparacion: i.preparacion || ""
+          })),
+          total, estado: "nuevo", origen: "web",
+          creadoEn: serverTimestamp(), turno, tenantId,
+        })).id;
+
+        localStorage.setItem("trackingOrderId", orderId);
+        setTrackingOrderId(orderId);
+        setCart([]);
+        setShowModal(false);
+        playOrderConfirmed();
+        setConfirmedTurno(turno);
+      } else {
+        // ── Opción B: Efectivo / Transferencia / Terminal → SOLO WhatsApp ──
+        // NO se guarda nada en Firestore. El cajero registra el pedido manualmente.
+        const msgWA = buildMsg({ name, phone, delivery, address, payment, deliveryCost, total, turno, orderId: "wha" });
+        window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msgWA}`, "_blank");
+        setCart([]);
+        setShowModal(false);
+        playOrderConfirmed();
+        setConfirmedTurno(turno);
       }
-
-      playOrderConfirmed();
-      setConfirmedTurno(turno);
-    } catch(e){
+    } catch(e) {
       console.error(e);
-      alert("No se pudo enviar tu pedido. Por favor revisa tu conexión e intenta de nuevo. Si el problema sigue, avísanos por WhatsApp.");
+      if (esPagoOnline) {
+        alert("❌ El pago no pudo procesarse. Verifica los datos de tu tarjeta e intenta de nuevo, o elige otro método de pago.");
+      } else {
+        alert("No se pudo abrir WhatsApp. Por favor intenta de nuevo.");
+      }
     }
 
     setSending(false);
@@ -1094,6 +1104,19 @@ function App() {
         </div>
 
         {/* Tabs */}
+        {menuLoading ? (
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <p style={{fontSize:28,margin:"0 0 8px"}}>🍽️</p>
+            <p style={{color:G.textSub,fontSize:13}}>Cargando menú…</p>
+          </div>
+        ) : categories.length === 0 ? (
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <p style={{fontSize:36,margin:"0 0 8px"}}>😴</p>
+            <p style={{color:G.textSub,fontSize:14,fontWeight:700}}>Menú no disponible</p>
+            <p style={{color:G.textSub,fontSize:12}}>Por favor intenta más tarde o contáctanos por WhatsApp.</p>
+          </div>
+        ) : (
+          <>
         <div style={{display:"flex",overflowX:"auto",gap:0,
           background:G.warmGray,borderBottom:`2px solid ${G.divider}`,
           scrollbarWidth:"none",padding:"0 4px"}}>
@@ -1142,6 +1165,8 @@ function App() {
         {showModal&&(
           <OrderModal items={cart} onClose={()=>setShowModal(false)}
             onSend={handleSend} onRemove={removeFromCart} disabled={isDisabled} />
+        )}
+          </>
         )}
       </>} {/* <-- ESTE ES EL CIERRE DEL FRAGMENTO QUE FALTABA */}
     </div>

@@ -2,21 +2,21 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App.jsx';
-import Admin from './Admin.jsx'; // ← Importamos tu interfaz de administrador
+import Admin from './Admin.jsx';
+import SuperAdmin from './SuperAdmin.jsx';
 import reportWebVitals from './reportWebVitals';
 
-// Un enrutador simple: detecta si estás en /admin
 function Router() {
-  if (window.location.pathname === '/admin' || window.location.pathname === '/admin/') {
-    return <Admin />;
-  }
+  const path = window.location.pathname;
+  if (path === '/admin' || path === '/admin/') return <Admin />;
+  if (path === '/superadmin')                  return <SuperAdmin />;
   return <App />;
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <Router /> {/* ← Ahora renderizamos el Router en lugar de solo App */}
+    <Router />
   </React.StrictMode>
 );
 
