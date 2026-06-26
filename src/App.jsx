@@ -219,7 +219,7 @@ function MenuItem({ item, onAdd, disabled }) {
                  : [];
 
   return (
-    <div style={{
+    <div className="menu-item-card" style={{
       background:G.cardBg, borderRadius:10,
       border:`1px solid ${open?G.gold:G.divider}`,
       marginBottom:8, overflow:"hidden",
@@ -228,6 +228,17 @@ function MenuItem({ item, onAdd, disabled }) {
       opacity: disabled ? 0.55 : 1
     }}>
       <div style={{display:"flex",alignItems:"flex-start",padding:"13px 14px",gap:10}}>
+        {item.imagen && (
+          <div style={{
+            width:64, height:64, borderRadius:9, overflow:"hidden", flexShrink:0,
+            background:G.warmGray,
+          }}>
+            <img src={item.imagen} alt={item.name} className="menu-item-img" style={{
+              width:"100%", height:"100%", objectFit:"cover", display:"block",
+              transition:"transform .35s ease",
+            }} />
+          </div>
+        )}
         <div style={{flex:1}}>
           <p style={{color:G.gold,fontWeight:800,fontSize:14.5,margin:"0 0 3px",
             fontFamily:"Georgia,serif"}}>{item.name}</p>
@@ -1061,6 +1072,12 @@ function App() {
       onClick={handleFirstInteraction}
       style={{background:G.offWhite,minHeight:"100vh",
         fontFamily:"'Segoe UI',system-ui,sans-serif",maxWidth:640,margin:"0 auto"}}>
+
+      <style>{`
+        .menu-item-card:hover .menu-item-img,
+        .menu-item-card:active .menu-item-img { transform: scale(1.1); }
+        .menu-item-card { -webkit-tap-highlight-color: transparent; }
+      `}</style>
 
       {/* SI HAY PEDIDO ACTIVO MUESTRA EL RASTREADOR */}
       {trackingOrderId && <OrderTracker orderId={trackingOrderId} onClose={() => { setTrackingOrderId(null); localStorage.removeItem("trackingOrderId"); }} />}
