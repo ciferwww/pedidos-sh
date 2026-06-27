@@ -21,11 +21,15 @@ export default function AdminRoot() {
 // ────────────────────────────────────────────────────────────────────
 
 const ESTADOS = {
-  nuevo:      { label:"Nuevo",      color:"#e74c3c", bg:"#fdecea", icon:"🔴" },
-  en_proceso: { label:"En proceso", color:"#f39c12", bg:"#fef9e7", icon:"🟡" },
-  listo:      { label:"Listo",      color:"#27ae60", bg:"#eafaf1", icon:"🟢" },
-  entregado:  { label:"Entregado",  color:"#7f8c8d", bg:"#f2f3f4", icon:"⚫" },
+  nuevo:      { label:"Nuevo",      color:"#e74c3c", bg:"#fdecea" },
+  en_proceso: { label:"En proceso", color:"#f39c12", bg:"#fef9e7" },
+  listo:      { label:"Listo",      color:"#27ae60", bg:"#eafaf1" },
+  entregado:  { label:"Entregado",  color:"#7f8c8d", bg:"#f2f3f4" },
 };
+
+const EstadoDot = ({ color }) => (
+  <span style={{ width:7, height:7, borderRadius:"50%", background:color, display:"inline-block", marginRight:6 }} />
+);
 
 const NEXT = { nuevo:"en_proceso", en_proceso:"listo", listo:"entregado", entregado:null };
 
@@ -36,7 +40,6 @@ const NEXT = { nuevo:"en_proceso", en_proceso:"listo", listo:"entregado", entreg
 // datos iniciales en Firestore, usa el script de importación que se
 // generó junto con este cambio (menu-seed.json).
 
-const CAT_ICONS={Botanas:"🍟",Sushi:"🍣",Platillos:"🍱",Hamburguesas:"🍔",Bebidas:"🧋",Entradas:"🥗",Paquetes:"📦"};
 const PROTEINS_SUSHI=["Camarón","Res","Pollo","Tocino","Surimi","Tampico"];
 const PROTEINS_BURGER=["Res","Pollo","Camarón"];
 const SAUCES_BONELESS = ["BBQ", "Mitad y Mitad", "Búfalo", "Mixto"];
@@ -70,7 +73,7 @@ function PedidoTimer({ creadoEn }) {
   }, [creadoEn]);
 
   const color = mins <= 15 ? "#27ae60" : mins <= 25 ? "#f39c12" : "#e74c3c";
-  const label = mins <= 15 ? "A tiempo" : mins <= 25 ? "Demora" : "⚠ Crítico";
+  const label = mins <= 15 ? "A tiempo" : mins <= 25 ? "Demora" : "Crítico";
   const isPulsing = mins > 25;
 
   return (
@@ -81,7 +84,7 @@ function PedidoTimer({ creadoEn }) {
       border:`1px solid ${color}33`,
       animation: isPulsing ? "pulse 1.2s ease-in-out infinite" : "none",
     }}>
-      ⏱ {mins}min · {label}
+      {mins}min · {label}
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}`}</style>
     </span>
   );
@@ -108,8 +111,8 @@ export function OrderCard({ pedido, onChangeEstado, G }) {
     :"—";
   const nextEstado=NEXT[pedido.estado];
   const origenLabel = pedido.origen==="pos"
-    ? (pedido.mesa?"🪑 Mesa "+pedido.mesa:"🏪 Mostrador")
-    : pedido.entrega==="recoger"?"🏪 Recoger":"🛵 Domicilio";
+    ? (pedido.mesa?"Mesa "+pedido.mesa:"Mostrador")
+    : pedido.entrega==="recoger"?"Recoger":"Domicilio";
 
   // Semaphore border color
   let borderColor = est.color + "33";
@@ -132,7 +135,7 @@ export function OrderCard({ pedido, onChangeEstado, G }) {
         <div style={{background:est.bg,border:`1.5px solid ${est.color}`,
           borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:800,color:est.color,whiteSpace:"nowrap",
           boxShadow:`0 2px 6px ${est.color}22`}}>
-          {est.icon} {est.label}</div>
+          <EstadoDot color={est.color} /> {est.label}</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
             <p style={{color:G.dark,fontWeight:800,fontSize:14,margin:0,
@@ -153,11 +156,11 @@ export function OrderCard({ pedido, onChangeEstado, G }) {
       {open&&(
         <div style={{padding:"14px 16px",background:"#fdfaf4"}}>
           <div style={{display:"flex",gap:12,marginBottom:10,flexWrap:"wrap"}}>
-            {pedido.telefono&&<span style={{color:G.gold,fontSize:13,fontWeight:700}}>📱 {pedido.telefono}</span>}
+            {pedido.telefono&&<span style={{color:G.gold,fontSize:13,fontWeight:700}}>{pedido.telefono}</span>}
             {pedido.pago&&<span style={{background:G.warmGray,borderRadius:8,padding:"2px 10px",
               color:G.textSub,fontSize:12,fontWeight:600}}>
-              {pedido.pago==="efectivo"?"💵":pedido.pago==="transferencia"?"📲":"💳"} {pedido.pago}</span>}
-            {pedido.direccion&&<span style={{color:G.textSub,fontSize:12}}>📍 {pedido.direccion}</span>}
+              {pedido.pago}</span>}
+            {pedido.direccion&&<span style={{color:G.textSub,fontSize:12}}>{pedido.direccion}</span>}
           </div>
 
           {pedido.descuentoAplicado > 0 && (
@@ -178,23 +181,23 @@ export function OrderCard({ pedido, onChangeEstado, G }) {
                 <div>
                   <span style={{color:G.dark,fontWeight:700,fontSize:13}}>
                     {a.cantidad>1&&`${a.cantidad}× `}{a.nombre}
-                    {a.bomba&&<span style={{color:"#c0392b",fontSize:10,marginLeft:4}}>💣</span>}
+                    {a.bomba&&<span style={{color:"#c0392b",fontSize:9,fontWeight:900,marginLeft:4,letterSpacing:.5}}>BOMBA</span>}
                   </span>
                   {a.preparacion&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>({a.preparacion})</span>}
                   {a.protein&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>({a.protein})</span>}
                   {a.salsa&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>[{a.salsa}]</span>}
                   {a.alga !== null && a.alga !== undefined &&
-                    <span style={{color:G.textSub,fontSize:11,marginLeft:5}}>({a.alga ? "🌿 Con alga" : "Sin alga"})</span>}
+                    <span style={{color:G.textSub,fontSize:11,marginLeft:5}}>({a.alga ? "Con alga" : "Sin alga"})</span>}
                   {a.extras?.length>0&&<span style={{color:G.textSub,fontSize:11,marginLeft:5}}>+{a.extras.join(",")}</span>}
                   {a.nota&&<p style={{color:"#d4850a",fontSize:11,margin:"3px 0 0",fontStyle:"italic",
-                    background:"#fff8ee",borderRadius:6,padding:"2px 8px",display:"inline-block"}}>📝 {a.nota}</p>}
+                    background:"#fff8ee",borderRadius:6,padding:"2px 8px",display:"inline-block"}}>{a.nota}</p>}
                 </div>
                 <span style={{color:G.gold,fontWeight:800,fontSize:13,marginLeft:10}}>${a.subtotal}</span>
               </div>
             ))}
             {pedido.costoEnvio>0&&(
               <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0"}}>
-                <span style={{color:G.textSub,fontSize:13}}>🛵 Envío</span>
+                <span style={{color:G.textSub,fontSize:13}}>Envío</span>
                 <span style={{color:G.gold,fontWeight:800,fontSize:13}}>${pedido.costoEnvio}</span>
               </div>
             )}
@@ -206,9 +209,9 @@ export function OrderCard({ pedido, onChangeEstado, G }) {
               fontWeight:800,fontSize:13,cursor:"pointer",
               boxShadow:`0 3px 12px ${ESTADOS[nextEstado].color}44`,
               transition:"filter .15s"}}>
-              {ESTADOS[nextEstado].icon} Marcar como "{ESTADOS[nextEstado].label}"</button>
+              Marcar como "{ESTADOS[nextEstado].label}"</button>
           )}
-          {!nextEstado&&<p style={{textAlign:"center",color:"#27ae60",fontSize:12,margin:0,fontWeight:700}}>✅ Completado</p>}
+          {!nextEstado&&<p style={{textAlign:"center",color:"#27ae60",fontSize:12,margin:0,fontWeight:700}}>Completado</p>}
         </div>
       )}
     </div>
@@ -344,6 +347,7 @@ function POS({ onPedidoCreado, G }) {
           grouped[c].push({
             id: d.id,
             name: data.name, price: data.price, imagen: data.imagen || null,
+            desc: data.desc || "",
             // Normalización al esquema que usa la lógica de showQuick/confirmQuick:
             protein: !!data.hasProtein,
             burgerProtein: !!data.hasBurgerProtein,
@@ -526,7 +530,7 @@ function POS({ onPedidoCreado, G }) {
               <div style={{marginBottom:16}}>
                 <p style={{color:"#9a7a3a",fontSize:10,fontWeight:800,margin:"0 0 8px",letterSpacing:1.5}}>ALGA</p>
                 <div style={{display:"flex",gap:6}}>
-                  {["🌿 Con alga","Sin alga"].map((a,i)=>(
+                  {["Con alga","Sin alga"].map((a,i)=>(
                     <button key={a} id={`quick-alga-${i}`} onClick={()=>setTempAlga(i===0)} style={{
                       flex:1,padding:"5px 14px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,
                       border:`1.5px solid ${tempAlga===(i===0)?G.gold:"#3a2e1a"}`,
@@ -591,7 +595,7 @@ function POS({ onPedidoCreado, G }) {
               background:"transparent",color:cat===c?G.gold:"#5a4a2a",
               fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",
               transition:"color .2s",letterSpacing:.5}}>
-              {CAT_ICONS[c]||"🍽️"} {c}</button>
+              {c}</button>
           ))}
         </div>
 
@@ -601,19 +605,18 @@ function POS({ onPedidoCreado, G }) {
         )}
         {!menuLoading && categories.length===0 && (
           <div style={{textAlign:"center",padding:50}}>
-            <p style={{fontSize:34,margin:"0 0 8px"}}>🍽️</p>
             <p style={{color:"#8a7050",fontSize:13}}>Todavía no hay productos en el menú.</p>
             <p style={{color:"#6b5a3a",fontSize:12}}>Ve a la pestaña "Menú" para agregar productos.</p>
           </div>
         )}
         {!menuLoading && cat && (
           <div style={{padding:12,display:"grid",
-            gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10,overflowY:"auto"}}>
+            gridTemplateColumns:"repeat(auto-fill,minmax(168px,1fr))",gap:10,overflowY:"auto"}}>
             {(menu[cat]||[]).map(item=>(
               <button key={item.id} id={`pos-item-${item.id}`} className="pos-item-btn" onClick={()=>addItem(item)} style={{
                 background:"linear-gradient(145deg,#1f1710,#1a120a)",
                 border:`1px solid ${G.gold}25`,borderRadius:12,
-                padding:item.imagen?0:"14px 10px",cursor:"pointer",textAlign:"center",
+                padding:item.imagen?0:"14px 10px",cursor:"pointer",textAlign:"left",
                 transition:"all .18s",boxShadow:"0 2px 8px #00000040",overflow:"hidden"}}>
                 {item.imagen && (
                   <div style={{width:"100%",height:80,overflow:"hidden"}}>
@@ -623,8 +626,13 @@ function POS({ onPedidoCreado, G }) {
                   </div>
                 )}
                 <div style={{padding:item.imagen?"10px 10px 12px":0}}>
-                  <p style={{color:G.goldLight,fontWeight:800,fontSize:13,margin:"0 0 6px",
+                  <p style={{color:G.goldLight,fontWeight:800,fontSize:13,margin:"0 0 4px",
                     fontFamily:"Georgia,serif",lineHeight:1.25}}>{item.name}</p>
+                  {item.desc && (
+                    <p style={{color:"#8a7050",fontSize:10.5,margin:"0 0 6px",lineHeight:1.35,
+                      overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
+                      {item.desc}</p>
+                  )}
                   <p style={{color:G.gold,fontWeight:900,fontSize:16,margin:"0 0 4px",fontFamily:"Georgia,serif"}}>${item.price}</p>
                   {item.fixedIngredients&&<span style={{fontSize:9,color:"#6b5030",letterSpacing:.5}}>INGREDIENTES FIJOS</span>}
                   {item.protein&&!item.fixedIngredients&&<span style={{fontSize:9,color:"#6b5030",letterSpacing:.5}}>ELIGE PROTEÍNA</span>}
@@ -655,7 +663,6 @@ function POS({ onPedidoCreado, G }) {
         <div style={{flex:1,overflowY:"auto",padding:"6px 0"}}>
           {cart.length===0&&(
             <div style={{textAlign:"center",paddingTop:48}}>
-              <p style={{fontSize:32,margin:"0 0 8px"}}>🍱</p>
               <p style={{color:"#b0a080",fontSize:13}}>Toca un producto para agregarlo</p>
             </div>
           )}
@@ -668,10 +675,10 @@ function POS({ onPedidoCreado, G }) {
                 <p style={{color:G.dark,fontWeight:700,fontSize:13,margin:"0 0 2px",
                   overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.nombre}</p>
                 {item.preparacion&&<p style={{color:"#8a7050",fontSize:11,margin:"0 0 1px"}}>{item.preparacion}</p>}
-                {item.protein&&<p style={{color:"#8a7050",fontSize:11,margin:"0 0 1px"}}>🥩 {item.protein}</p>}
-                {item.salsa&&<p style={{color:"#8a7050",fontSize:11,margin:"0 0 1px"}}>🫙 {item.salsa}</p>}
-                {item.alga!==null&&<p style={{color:"#8a7050",fontSize:10,margin:"0 0 1px"}}>{item.alga?"🌿 Con alga":"Sin alga"}</p>}
-                {item.nota&&<p style={{color:"#c07820",fontSize:11,margin:"0 0 1px",fontStyle:"italic"}}>📝 {item.nota}</p>}
+                {item.protein&&<p style={{color:"#8a7050",fontSize:11,margin:"0 0 1px"}}>{item.protein}</p>}
+                {item.salsa&&<p style={{color:"#8a7050",fontSize:11,margin:"0 0 1px"}}>{item.salsa}</p>}
+                {item.alga!==null&&<p style={{color:"#8a7050",fontSize:10,margin:"0 0 1px"}}>{item.alga?"Con alga":"Sin alga"}</p>}
+                {item.nota&&<p style={{color:"#c07820",fontSize:11,margin:"0 0 1px",fontStyle:"italic"}}>{item.nota}</p>}
                 {/* Price edit inline */}
                 {editingPrice===i ? (
                   <div style={{display:"flex",gap:4,marginTop:4,alignItems:"center"}}>
@@ -695,7 +702,7 @@ function POS({ onPedidoCreado, G }) {
                   <button onClick={()=>startEditPrice(i)} style={{background:"none",border:"none",
                     color:"#b0956a",fontSize:10,cursor:"pointer",padding:"2px 0",marginTop:2,
                     display:"flex",alignItems:"center",gap:3}}>
-                    ✏️ <span style={{textDecoration:"underline"}}>Editar precio</span>
+                    <span style={{textDecoration:"underline"}}>Editar precio</span>
                   </button>
                 )}
               </div>
@@ -730,7 +737,7 @@ function POS({ onPedidoCreado, G }) {
                   border:`1.5px solid ${payment===p?G.gold:G.divider}`,
                   background:payment===p?G.gold:"transparent",
                   color:payment===p?G.dark:G.textSub,transition:"all .15s"}}>
-                  {p==="efectivo"?"💵 Efect.":p==="transferencia"?"📲 Trans.":"💳 Term."}</button>
+                  {p==="efectivo"?"Efectivo":p==="transferencia"?"Transferencia":"Terminal"}</button>
               ))}
             </div>
             {/* Total */}
@@ -921,7 +928,7 @@ function WAPedidoModal({ G, onClose, colRef }) {
             <div>
               <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 5px",letterSpacing:1}}>ENTREGA</p>
               <div style={{display:"flex",gap:6}}>
-                {[{val:"recoger",label:"🏪 Recoger"},{val:"domicilio",label:"🛵 Domicilio"}].map(o=>(
+                {[{val:"recoger",label:"Recoger"},{val:"domicilio",label:"Domicilio"}].map(o=>(
                   <button key={o.val} onClick={()=>setEntrega(o.val)} style={{
                     flex:1,padding:"7px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,
                     border:`1.5px solid ${entrega===o.val?G.gold:G.divider}`,
@@ -954,7 +961,7 @@ function WAPedidoModal({ G, onClose, colRef }) {
             <div>
               <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 5px",letterSpacing:1}}>PAGO VALIDADO</p>
               <div style={{display:"flex",gap:5}}>
-                {[{val:"efectivo",label:"💵 Efectivo"},{val:"transferencia",label:"📲 Transf."},{val:"terminal",label:"💳 Terminal"}].map(o=>(
+                {[{val:"efectivo",label:"Efectivo"},{val:"transferencia",label:"Transferencia"},{val:"terminal",label:"Terminal"}].map(o=>(
                   <button key={o.val} onClick={()=>setPago(o.val)} style={{
                     flex:1,padding:"7px 4px",borderRadius:8,cursor:"pointer",fontWeight:800,fontSize:11,
                     border:`1.5px solid ${pago===o.val?G.gold:G.divider}`,
@@ -1103,7 +1110,7 @@ function Cierre({ G }) {
 
   return (
     <div style={{padding:20,maxWidth:900}}>
-      <h3 style={{color:G.dark,fontFamily:"Georgia,serif",marginTop:0}}>📊 Cierre del día</h3>
+      <h3 style={{color:G.dark,fontFamily:"Georgia,serif",marginTop:0}}>Cierre del día</h3>
       <div style={{display:"flex",gap:10,marginBottom:16,alignItems:"flex-end"}}>
         <div>
           <p style={{color:G.textSub,fontSize:11,fontWeight:800,margin:"0 0 4px",letterSpacing:1}}>FECHA</p>
@@ -1117,7 +1124,7 @@ function Cierre({ G }) {
         {pedidos.length>0&&(
           <button id="btn-exportar-csv" onClick={exportExcel} style={{padding:"9px 20px",borderRadius:8,border:"none",
             background:"#27ae60",color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer"}}>
-            ⬇ Exportar CSV/Excel</button>
+            Exportar CSV/Excel</button>
         )}
       </div>
 
@@ -1129,9 +1136,9 @@ function Cierre({ G }) {
             {[
               {label:"Total del día",value:"$"+total.toFixed(2),color:G.gold},
               {label:"Pedidos",value:pedidos.length,color:G.dark},
-              {label:"💵 Efectivo",value:"$"+porPago.efectivo.toFixed(2),color:"#27ae60"},
-              {label:"📲 Transferencia",value:"$"+porPago.transferencia.toFixed(2),color:"#2980b9"},
-              {label:"💳 Terminal",value:"$"+porPago.terminal.toFixed(2),color:"#8e44ad"},
+              {label:"Efectivo",value:"$"+porPago.efectivo.toFixed(2),color:"#27ae60"},
+              {label:"Transferencia",value:"$"+porPago.transferencia.toFixed(2),color:"#2980b9"},
+              {label:"Terminal",value:"$"+porPago.terminal.toFixed(2),color:"#8e44ad"},
             ].map(s=>(
               <div key={s.label} style={{background:G.cardBg,borderRadius:10,padding:"12px 16px",
                 border:`1px solid ${G.divider}`,minWidth:120}}>
@@ -1165,7 +1172,7 @@ function Cierre({ G }) {
                       <td style={{padding:"8px 12px",color:G.textSub,fontSize:12}}>
                         {p.entrega==="recoger"?(p.mesa?"Mesa "+p.mesa:"Mostrador"):"Domicilio"}</td>
                       <td style={{padding:"8px 12px",color:G.textSub}}>
-                        {p.pago==="efectivo"?"💵":p.pago==="transferencia"?"📲":"💳"} {p.pago}</td>
+                        {p.pago}</td>
                       <td style={{padding:"8px 12px",color:G.textSub}}>${p.subtotal||p.total}</td>
                       <td style={{padding:"8px 12px",color:"#c0392b"}}>
                         {p.descuentoAplicado>0?`−$${p.descuentoAplicado.toFixed(2)}`:"—"}</td>
@@ -1173,7 +1180,7 @@ function Cierre({ G }) {
                         ${(p.totalFinal ?? p.total).toFixed ? (p.totalFinal ?? p.total).toFixed(2) : (p.totalFinal ?? p.total)}</td>
                       <td style={{padding:"8px 12px"}}>
                         <span style={{background:est.bg,color:est.color,borderRadius:12,
-                          padding:"2px 8px",fontSize:11,fontWeight:800}}>{est.icon} {est.label}</span>
+                          padding:"2px 8px",fontSize:11,fontWeight:800}}><EstadoDot color={est.color} />{est.label}</span>
                       </td>
                     </tr>
                   );
@@ -1185,7 +1192,6 @@ function Cierre({ G }) {
       )}
       {!loading&&pedidos.length===0&&(
         <div style={{textAlign:"center",padding:40}}>
-          <p style={{fontSize:32}}>📭</p>
           <p style={{color:G.textSub}}>No hay pedidos para esta fecha</p>
         </div>
       )}
@@ -1195,10 +1201,20 @@ function Cierre({ G }) {
 
 // ── Config ───────────────────────────────────────────────────────────
 function Config({ G }) {
-  const { configDocRef, pausado, setPausa } = useTenant();
+  const { configDocRef, pausado, setPausa, tenantId } = useTenant();
+  const { brand, colors } = useTenantConfig();
   const [deliveryCost,setDeliveryCost]=useState(30);
   const [saved,setSaved]=useState(false);
   const [loading,setLoading]=useState(true);
+
+  const [nombre, setNombre]   = useState(brand?.nombre || "");
+  const [slogan, setSlogan]   = useState(brand?.slogan || "");
+  const [whatsapp, setWhatsapp] = useState(brand?.whatsapp || "");
+  const [logoUrl, setLogoUrl] = useState(brand?.logoUrl || "");
+  const [colorGold, setColorGold] = useState(colors?.gold || "#B8892A");
+  const [colorDark, setColorDark] = useState(colors?.dark || "#1C1208");
+  const [colorGoldLight, setColorGoldLight] = useState(colors?.goldLight || "#C9A84C");
+  const [savedBrand, setSavedBrand] = useState(false);
 
   useEffect(()=>{
     getDoc(configDocRef("general")).then(d=>{
@@ -1212,11 +1228,20 @@ function Config({ G }) {
     setSaved(true); setTimeout(()=>setSaved(false),2000);
   };
 
+  const saveBrand = async () => {
+    await setDoc(doc(db,"tenants",tenantId),{
+      nombre: nombre.trim(), slogan: slogan.trim(),
+      whatsapp: whatsapp.trim(), logoUrl: logoUrl.trim() || null,
+      branding: { gold: colorGold, goldLight: colorGoldLight, dark: colorDark },
+    },{merge:true});
+    setSavedBrand(true); setTimeout(()=>setSavedBrand(false),2000);
+  };
+
   if(loading) return <p style={{padding:20,color:G.textSub}}>Cargando configuración…</p>;
 
   return (
-    <div style={{padding:20,maxWidth:480}}>
-      <h3 style={{color:G.dark,fontFamily:"Georgia,serif",marginTop:0}}>⚙️ Configuración</h3>
+    <div style={{padding:20,maxWidth:560}}>
+      <h3 style={{color:G.dark,fontFamily:"Georgia,serif",marginTop:0}}>Configuración</h3>
 
       {/* Pausa de Emergencia */}
       <div style={{background:pausado?"#fdecea":"#eafaf1",borderRadius:12,padding:20,
@@ -1224,7 +1249,7 @@ function Config({ G }) {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div>
             <p style={{color:pausado?"#e74c3c":"#27ae60",fontWeight:900,fontSize:15,margin:"0 0 4px"}}>
-              {pausado?"🚨 Cocina PAUSADA":"✅ Cocina Activa"}
+              {pausado?"Cocina PAUSADA":"Cocina Activa"}
             </p>
             <p style={{color:G.textSub,fontSize:12,margin:0}}>
               {pausado?"No se aceptan pedidos nuevos del menú digital.":"El menú digital acepta pedidos normalmente."}
@@ -1240,13 +1265,13 @@ function Config({ G }) {
               color:pausado?G.dark:"#fff"
             }}
           >
-            {pausado?"▶ Reanudar":"⏸ Pausar"}
+            {pausado?"Reanudar":"Pausar"}
           </button>
         </div>
       </div>
 
       {/* Delivery cost */}
-      <div style={{background:G.cardBg,borderRadius:12,padding:"20px",border:`1px solid ${G.divider}`}}>
+      <div style={{background:G.cardBg,borderRadius:12,padding:"20px",border:`1px solid ${G.divider}`,marginBottom:20}}>
         <p style={{color:G.textSub,fontSize:11,fontWeight:800,margin:"0 0 4px",letterSpacing:1}}>
           COSTO DE ENVÍO A DOMICILIO ($)</p>
         <p style={{color:G.textSub,fontSize:12,margin:"0 0 10px"}}>
@@ -1257,11 +1282,81 @@ function Config({ G }) {
         <button id="btn-save-config" onClick={save} style={{width:"100%",marginTop:12,padding:"11px",borderRadius:9,
           border:"none",background:saved?"#27ae60":G.gold,color:saved?"#fff":G.dark,
           fontWeight:900,fontSize:15,cursor:"pointer",transition:"background .3s"}}>
-          {saved?"✓ Guardado":"Guardar cambios"}</button>
+          {saved?"Guardado":"Guardar cambios"}</button>
+      </div>
+
+      {/* Marca y personalización */}
+      <div style={{background:G.cardBg,borderRadius:12,padding:"20px",border:`1px solid ${G.divider}`}}>
+        <p style={{color:G.textSub,fontSize:11,fontWeight:800,margin:"0 0 4px",letterSpacing:1}}>
+          MARCA Y PERSONALIZACIÓN</p>
+        <p style={{color:G.textSub,fontSize:12,margin:"0 0 14px"}}>
+          Esto se refleja en el menú del cliente, el ticket y el panel administrativo.
+        </p>
+
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div>
+            <label style={cfgLabel(G)}>Nombre del negocio</label>
+            <input value={nombre} onChange={e=>setNombre(e.target.value)} style={cfgInput(G)} />
+          </div>
+          <div>
+            <label style={cfgLabel(G)}>Slogan</label>
+            <input value={slogan} onChange={e=>setSlogan(e.target.value)} style={cfgInput(G)} />
+          </div>
+          <div>
+            <label style={cfgLabel(G)}>WhatsApp (con código de país, sin signos)</label>
+            <input value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} placeholder="521234567890" style={cfgInput(G)} />
+          </div>
+          <div>
+            <label style={cfgLabel(G)}>Logo (link directo a imagen, opcional)</label>
+            <input value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} placeholder="https://…" style={cfgInput(G)} />
+          </div>
+
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            <div>
+              <label style={cfgLabel(G)}>Color principal</label>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="color" value={colorGold} onChange={e=>setColorGold(e.target.value)}
+                  style={{width:38,height:34,border:`1.5px solid ${G.divider}`,borderRadius:8,cursor:"pointer"}} />
+                <input value={colorGold} onChange={e=>setColorGold(e.target.value)} style={{...cfgInput(G),width:90}} />
+              </div>
+            </div>
+            <div>
+              <label style={cfgLabel(G)}>Color claro / acento</label>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="color" value={colorGoldLight} onChange={e=>setColorGoldLight(e.target.value)}
+                  style={{width:38,height:34,border:`1.5px solid ${G.divider}`,borderRadius:8,cursor:"pointer"}} />
+                <input value={colorGoldLight} onChange={e=>setColorGoldLight(e.target.value)} style={{...cfgInput(G),width:90}} />
+              </div>
+            </div>
+            <div>
+              <label style={cfgLabel(G)}>Color oscuro / fondo</label>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="color" value={colorDark} onChange={e=>setColorDark(e.target.value)}
+                  style={{width:38,height:34,border:`1.5px solid ${G.divider}`,borderRadius:8,cursor:"pointer"}} />
+                <input value={colorDark} onChange={e=>setColorDark(e.target.value)} style={{...cfgInput(G),width:90}} />
+              </div>
+            </div>
+          </div>
+
+          <button id="btn-save-brand" onClick={saveBrand} style={{padding:"11px",borderRadius:9,
+            border:"none",background:savedBrand?"#27ae60":G.gold,color:savedBrand?"#fff":G.dark,
+            fontWeight:900,fontSize:15,cursor:"pointer",transition:"background .3s"}}>
+            {savedBrand?"Guardado":"Guardar marca y colores"}</button>
+        </div>
       </div>
     </div>
   );
 }
+
+const cfgLabel = (G) => ({
+  display:"block", color:G.textSub, fontSize:10.5, fontWeight:800,
+  letterSpacing:.8, margin:"0 0 5px", textTransform:"uppercase",
+});
+const cfgInput = (G) => ({
+  width:"100%", boxSizing:"border-box", padding:"9px 12px", borderRadius:8,
+  border:`1.5px solid ${G.divider}`, fontSize:13, fontFamily:"inherit",
+  background:"#fff", color:G.dark, outline:"none",
+});
 
 // ── DashboardGerencial importado desde ./DashboardGerencial.jsx ──────
 
@@ -1300,17 +1395,25 @@ function Dashboard({ empleado, onLogout }) {
   const hayNuevos = counts.nuevo > 0;
 
   const TODAS_LAS_TABS = [
-    {key:"pedidos", label:"📋 Pedidos",            roles:["jefe","cajero"]},
-    {key:"pos",     label:"🏪 Punto de Venta",     roles:["jefe","cajero"]},
-    {key:"cierre",  label:"📊 Cierre del día",      roles:["jefe"]},
-    {key:"menu",    label:"🍽️ Menú",               roles:["jefe"]},
-    {key:"config",  label:"⚙️ Config",              roles:["jefe"]},
-    {key:"dash",    label:"📈 Dashboard Gerencial", roles:["jefe"]},
+    {key:"pedidos", label:"Pedidos",            roles:["jefe","cajero"]},
+    {key:"pos",     label:"Punto de Venta",     roles:["jefe","cajero"]},
+    {key:"cierre",  label:"Cierre del día",      roles:["jefe"]},
+    {key:"menu",    label:"Menú",               roles:["jefe"]},
+    {key:"config",  label:"Config",              roles:["jefe"]},
+    {key:"dash",    label:"Dashboard Gerencial", roles:["jefe"]},
   ];
   const TABS = TODAS_LAS_TABS.filter(t => t.roles.includes(empleado.rol));
 
+  // Venta de hoy — métrica rápida visible en la cabecera del panel
+  const ventasHoy = (() => {
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    return pedidos
+      .filter(p => p.creadoEn?.toDate && p.creadoEn.toDate() >= hoy)
+      .reduce((s,p) => s + (p.totalFinal ?? p.total ?? 0), 0);
+  })();
+
   return (
-    <div style={{minHeight:"100vh",background:"#f0ece4",fontFamily:"'Segoe UI',sans-serif"}}>
+    <div style={{minHeight:"100vh",background:"#eef0f3",fontFamily:"'Segoe UI',sans-serif"}}>
       <style>{`
         @keyframes badgePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.15)}}
         @keyframes beepRing{0%,100%{transform:scale(1)}20%,80%{transform:scale(1.08)}}
@@ -1321,8 +1424,11 @@ function Dashboard({ empleado, onLogout }) {
       <div style={{background:G.dark,padding:"0 20px",borderBottom:`2px solid ${G.gold}44`,
         display:"flex",alignItems:"center",height:62,boxSizing:"border-box",flexWrap:"wrap",gap:6,
         boxShadow:"0 2px 16px #00000044"}}>
-        <p style={{color:G.gold,fontFamily:"Georgia,serif",fontSize:19,fontWeight:900,margin:0,letterSpacing:2.5}}>
-          🔥 SHEKINAH</p>
+        <p style={{color:G.gold,fontFamily:"Georgia,serif",fontSize:18,fontWeight:900,margin:0,letterSpacing:2.5}}>
+          {(brand?.nombre || "PANEL").toUpperCase()}</p>
+        <span style={{color:"#8a7a5a",fontSize:10,fontWeight:700,letterSpacing:1.5,marginLeft:-2}}>
+          PANEL ADMINISTRATIVO
+        </span>
 
         {/* Tenant badge */}
         <span style={{background:"#ffffff10",color:"#6a5a3a",borderRadius:6,
@@ -1336,7 +1442,7 @@ function Dashboard({ empleado, onLogout }) {
             background:"#c0392b",color:"#fff",borderRadius:8,
             padding:"3px 12px",fontSize:11,fontWeight:900,
             animation:"badgePulse 1.2s ease infinite",border:"1px solid #e74c3c",letterSpacing:.5
-          }}>🚨 PAUSADO</span>
+          }}>PAUSADO</span>
         )}
 
         {/* New order bell */}
@@ -1345,7 +1451,7 @@ function Dashboard({ empleado, onLogout }) {
             background:"#c0392b",color:"#fff",borderRadius:8,
             padding:"3px 12px",fontSize:11,fontWeight:900,
             animation:"beepRing 1.5s ease infinite",letterSpacing:.5
-          }}>🔔 {counts.nuevo} NUEVO{counts.nuevo>1?"S":""}</span>
+          }}>{counts.nuevo} NUEVO{counts.nuevo>1?"S":""}</span>
         )}
 
         <div style={{display:"flex",gap:2,marginLeft:isMobile?0:20,flexWrap:"wrap",
@@ -1353,20 +1459,27 @@ function Dashboard({ empleado, onLogout }) {
           {TABS.map(t=>(
             <button key={t.key} id={`tab-${t.key}`} className="dash-tab" onClick={()=>setTab(t.key)} style={{
               padding:"5px 14px",borderRadius:7,border:"none",cursor:"pointer",
-              fontSize:12,fontWeight:700,transition:"all .18s",
+              fontSize:12,fontWeight:700,transition:"all .18s",letterSpacing:.3,
               background:tab===t.key?G.gold:"transparent",
-              color:tab===t.key?G.dark:"#6a5a3a"}}>{t.label}</button>
+              color:tab===t.key?G.dark:"#8a7a5a"}}>{t.label}</button>
           ))}
         </div>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:14}}>
+          {empleado.rol==="jefe" && (
+            <div style={{textAlign:"right"}}>
+              <p style={{color:"#8a7a5a",fontSize:9,margin:0,letterSpacing:1}}>VENTAS HOY</p>
+              <p style={{color:"#9fd9a8",fontWeight:900,fontSize:15,margin:0,fontFamily:"Georgia,serif"}}>
+                ${ventasHoy.toLocaleString()}</p>
+            </div>
+          )}
           <div style={{textAlign:"right"}}>
-            <p style={{color:"#5a4a2a",fontSize:9,margin:0,letterSpacing:1}}>{empleado.nombre} · {empleado.rol}</p>
-            <p style={{color:"#5a4a2a",fontSize:9,margin:0,letterSpacing:1}}>PENDIENTE</p>
+            <p style={{color:"#8a7a5a",fontSize:9,margin:0,letterSpacing:1}}>{empleado.nombre} · {empleado.rol}</p>
+            <p style={{color:"#8a7a5a",fontSize:9,margin:0,letterSpacing:1}}>PENDIENTE</p>
             <p style={{color:G.gold,fontWeight:900,fontSize:16,margin:0,fontFamily:"Georgia,serif"}}>
               ${pendiente.toLocaleString()}</p>
           </div>
           <button id="btn-logout" onClick={onLogout} style={{background:"none",border:`1px solid #2a2010`,
-            borderRadius:8,color:"#6a5a3a",padding:"5px 12px",fontSize:12,cursor:"pointer",
+            borderRadius:8,color:"#8a7a5a",padding:"5px 12px",fontSize:12,cursor:"pointer",
             transition:"all .15s"}}>Salir</button>
         </div>
       </div>
@@ -1405,7 +1518,6 @@ function Dashboard({ empleado, onLogout }) {
           {loading&&<p style={{textAlign:"center",color:G.textSub,padding:40}}>Cargando pedidos…</p>}
           {!loading&&filtrados.length===0&&(
             <div style={{textAlign:"center",padding:40}}>
-              <p style={{fontSize:36}}>🍣</p>
               <p style={{color:G.textSub}}>No hay pedidos {filtro!=="todos"?`"${ESTADOS[filtro]?.label}"`:""}</p>
             </div>
           )}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {  addDoc, serverTimestamp, getDoc, onSnapshot, doc, collection} from "firebase/firestore";
 import { useTenant, useTenantConfig, useIsClosedHours, TenantProvider } from "./TenantContext";
+import { genericDescFor } from "./GestorMenu";
 
 
 // 
@@ -242,7 +243,8 @@ function MenuItem({ item, onAdd, disabled }) {
         <div style={{flex:1}}>
           <p style={{color:G.gold,fontWeight:800,fontSize:14.5,margin:"0 0 3px",
             fontFamily:"Georgia,serif"}}>{item.name}</p>
-          <p style={{color:G.textSub,fontSize:12,margin:0,lineHeight:1.45}}>{item.desc}</p>
+          <p style={{color:G.textSub,fontSize:12,margin:0,lineHeight:1.45}}>
+            {item.desc || genericDescFor(item.categoria)}</p>
           {item.tags?.length > 0 && (
             <div style={{display:"flex",gap:4,marginTop:5,flexWrap:"wrap"}}>
               {item.tags.map(t => {
@@ -753,11 +755,11 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
               <SummaryRow label="Cliente" value={name} />
               <SummaryRow label="Teléfono" value={phone} />
               <SummaryRow label="Entrega"
-                value={delivery==="recoger"?"🏪 Recoger en restaurante":`🛵 Domicilio: ${address}`} />
+                value={delivery==="recoger"?"Recoger en restaurante":`Domicilio: ${address}`} />
               <SummaryRow label="Pago"
-                value={payment==="efectivo"?"💵 Efectivo"
-                      :payment==="transferencia"?"📲 Transferencia"
-                      :payment==="terminal"?"💳 Terminal bancaria":"💳 Tarjeta"} />
+                value={payment==="efectivo"?"Efectivo"
+                      :payment==="transferencia"?"Transferencia"
+                      :payment==="terminal"?"Terminal bancaria":"Tarjeta"} />
               <Divider />
               <p style={{color:G.textSub,fontWeight:700,fontSize:12,margin:"0 0 6px"}}>
                 ARTÍCULOS ({items.reduce((s,i)=>s+i.qty,0)})</p>
@@ -765,14 +767,14 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
                 <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                   <span style={{color:G.dark,fontSize:13}}>
                     {item.qty>1&&`${item.qty}× `}{item.name}
-                    {item.bomba&&" 💣"}{item.protein&&` (${item.protein})`}
+                    {item.bomba&&" · Bomba"}{item.protein&&` (${item.protein})`}
                   </span>
                   <span style={{color:G.gold,fontWeight:800,fontSize:13}}>${item.totalPrice}</span>
                 </div>
               ))}
               {delivery==="domicilio"&&(
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={{color:G.textSub,fontSize:13}}>🛵 Costo de envío</span>
+                  <span style={{color:G.textSub,fontSize:13}}>Costo de envío</span>
                   <span style={{color:G.gold,fontWeight:800,fontSize:13}}>${deliveryCost}</span>
                 </div>
               )}
@@ -787,7 +789,7 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
                 /* ── Opción A: Pago con tarjeta → pasarela → Firestore ── */
                 <div style={{background:"#f0faf4",border:"1.5px solid #27ae60",borderRadius:12,padding:"14px 16px",marginBottom:8}}>
                   <p style={{color:"#1a7a40",fontWeight:800,fontSize:13,margin:"0 0 4px"}}>
-                    💳 Pago seguro en línea
+                    Pago seguro en línea
                   </p>
                   <p style={{color:"#3a6a4a",fontSize:12,margin:"0 0 12px"}}>
                     Tu pedido entra directo a cocina al confirmarse el pago. No necesitas enviar nada por WhatsApp.
@@ -812,9 +814,9 @@ function OrderModal({ items, onClose, onSend, onRemove, disabled }) {
                 /* ── Opción B: Efectivo / Transferencia / Terminal → WhatsApp ── */
                 <div style={{background:"#fffbf0",border:`1.5px solid ${G.gold}`,borderRadius:12,padding:"14px 16px",marginBottom:8}}>
                   <p style={{color:G.goldBg,fontWeight:800,fontSize:13,margin:"0 0 4px"}}>
-                    {payment==="efectivo"?"💵 Pago en efectivo"
-                     :payment==="transferencia"?"📲 Pago por transferencia"
-                     :"💳 Terminal bancaria"}
+                    {payment==="efectivo"?"Pago en efectivo"
+                     :payment==="transferencia"?"Pago por transferencia"
+                     :"Terminal bancaria"}
                   </p>
                   <p style={{color:G.textSub,fontSize:12,margin:"0 0 12px"}}>
                     {payment==="transferencia"
@@ -863,7 +865,7 @@ const nextBtn = (G) => ({
 // ── App ──────────────────────────────────────────────────────────────
 function App() {
   const { tenantId, colRef, pausado, horario, unlockAudio, playAddToCart, playOrderConfirmed } = useTenant();
-  const { loading: configLoading, isSuspended: tenantSuspended } = useTenantConfig();
+  const { loading: configLoading, isSuspended: tenantSuspended, brand } = useTenantConfig();
   const isClosed = useIsClosedHours(horario);
   const isDisabled = isClosed || pausado;
   const [trackingOrderId, setTrackingOrderId] = useState(() => {
@@ -951,17 +953,18 @@ function App() {
   });
 
   const buildMsg = ({ name, phone, delivery, address, payment, deliveryCost, total, turno, orderId }) => {
-    let msg = `🔥 *NUEVO PEDIDO — SHEKINAH*\n`;
-    msg += `🎫 *Turno: #${turno}*\n`;
-    msg += `👤 *Cliente:* ${name}\n`;
-    msg += `📱 *Teléfono:* ${phone}\n`;
-    msg += delivery==="recoger"?`🏪 *Entrega:* Pasa a recoger\n`:`🛵 *Entrega:* Domicilio — ${address}\n`;
-    msg += payment==="efectivo"?"💵 *Pago:* Efectivo\n"
-         : payment==="transferencia"?"📲 *Pago:* Transferencia\n":"💳 *Pago:* Terminal bancaria\n";
+    const nombreNegocio = (brand?.nombre || "PEDIDO").toUpperCase();
+    let msg = `*NUEVO PEDIDO — ${nombreNegocio}*\n`;
+    msg += `Turno: #${turno}\n`;
+    msg += `Cliente: ${name}\n`;
+    msg += `Teléfono: ${phone}\n`;
+    msg += delivery==="recoger"?`Entrega: Pasa a recoger\n`:`Entrega: Domicilio — ${address}\n`;
+    msg += payment==="efectivo"?"Pago: Efectivo\n"
+         : payment==="transferencia"?"Pago: Transferencia\n":"Pago: Terminal bancaria\n";
     msg += `\n━━━━━━━━━━━━━━━━━━━━\n`;
     cart.forEach((item,i)=>{
       msg += `\n*${i+1}. ${item.name}*`;
-      if(item.bomba) msg+=` 💣 BOMBA`;
+      if(item.bomba) msg+=` (BOMBA)`;
       msg += ` × ${item.qty} — $${item.totalPrice}\n`;
       if(item.protein) msg+=`   • Proteína: ${item.protein}\n`;
       if(item.sauce)   msg+=`   • Salsa: ${item.sauce}\n`;
@@ -971,8 +974,8 @@ function App() {
         msg += `   • Alga: ${item.alga ? "Con alga" : "Sin alga"}\n`;
       if(item.note) msg+=`   • Nota: ${item.note}\n`;
     });
-    if(delivery==="domicilio") msg+=`\n🛵 Envío: $${deliveryCost}\n`;
-    msg += `\n━━━━━━━━━━━━━━━━━━━━\n💰 *TOTAL: ${total} MXN*\n\n📍 Sigue tu pedido en vivo aquí:\n${window.location.origin}/?rest=${tenantId}&track=${orderId}\n\n¡Gracias! 🙏`;
+    if(delivery==="domicilio") msg+=`\nEnvío: $${deliveryCost}\n`;
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n*TOTAL: ${total} MXN*\n\nSigue tu pedido en vivo aquí:\n${window.location.origin}/?rest=${tenantId}&track=${orderId}\n\n¡Gracias!`;
     return encodeURIComponent(msg);
   };
 
@@ -1128,8 +1131,7 @@ function App() {
           </div>
         ) : categories.length === 0 ? (
           <div style={{textAlign:"center",padding:"48px 20px"}}>
-            <p style={{fontSize:36,margin:"0 0 8px"}}>😴</p>
-            <p style={{color:G.textSub,fontSize:14,fontWeight:700}}>Menú no disponible</p>
+            <p style={{color:G.textSub,fontSize:14,fontWeight:700,margin:"0 0 4px"}}>Menú no disponible</p>
             <p style={{color:G.textSub,fontSize:12}}>Por favor intenta más tarde o contáctanos por WhatsApp.</p>
           </div>
         ) : (

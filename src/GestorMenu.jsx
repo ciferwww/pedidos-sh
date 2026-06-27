@@ -26,6 +26,23 @@ const ALL_TAGS = ["Picante","Popular","Individual"];
 const TAG_COLORS = { Picante:"#e74c3c", Popular:"#B8892A", Individual:"#2980b9" };
 const TAG_ICONS  = { Picante:"🌶", Popular:"⭐", Individual:"👤" };
 
+// Descripciones genéricas de respaldo por categoría — útiles como punto de
+// partida mientras se escribe el texto definitivo de cada platillo desde
+// aquí mismo. Edítalas libremente en el campo "Descripción" del producto.
+export const GENERIC_DESC_BY_CATEGORY = {
+  Botanas:      "Preparado fresco al momento, ideal para compartir.",
+  Sushi:        "Elaborado con ingredientes frescos, al estilo de la casa.",
+  Platillos:    "Receta de la casa, preparada con ingredientes frescos del día.",
+  Entradas:     "Para abrir el apetito, preparado con ingredientes frescos.",
+  Hamburguesas: "Carne jugosa y pan suave, armada al momento de tu pedido.",
+  Paquetes:     "Combinación pensada para compartir, con lo mejor de la casa.",
+  Bebidas:      "Bebida preparada al momento, servida bien fría.",
+};
+export const GENERIC_DESC_DEFAULT = "Preparado con ingredientes frescos de la casa.";
+
+export const genericDescFor = (categoria) =>
+  GENERIC_DESC_BY_CATEGORY[categoria] || GENERIC_DESC_DEFAULT;
+
 const EMPTY_PRODUCT = {
   name: "", desc: "", price: "", categoria: "", orden: 0, disponible: true,
   tags: [], hasProtein: false, hasBurgerProtein: false, sauceOptions: "",
@@ -403,7 +420,16 @@ function ProductEditor({ producto, categoriasSugeridas, G, onClose, onSave }) {
             <input id="gm-field-name" value={form.name} onChange={e => set("name", e.target.value)} style={inputStyle(G)} placeholder="Ej. Torito roll" />
           </div>
           <div>
-            <FieldLabel G={G}>Descripción</FieldLabel>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <FieldLabel G={G}>Descripción</FieldLabel>
+              <button
+                type="button"
+                onClick={() => set("desc", genericDescFor(form.categoria))}
+                style={{ background:"none", border:"none", color:G.gold, fontSize:11, fontWeight:700,
+                  cursor:"pointer", padding:"0 0 6px", textDecoration:"underline" }}>
+                Usar descripción genérica
+              </button>
+            </div>
             <textarea value={form.desc} onChange={e => set("desc", e.target.value)} rows={2}
               style={{ ...inputStyle(G), resize: "none" }} placeholder="Ingredientes o detalle breve" />
           </div>
