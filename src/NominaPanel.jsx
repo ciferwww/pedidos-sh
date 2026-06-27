@@ -180,7 +180,7 @@ function TabEmpleados({ G, colRef, tenantId, empleados }) {
               <div>
                 <p style={{ margin: 0, fontWeight: 800, color: G.dark, fontSize: 14 }}>{e.nombre}</p>
                 <p style={{ margin: "3px 0 0", color: G.textSub, fontSize: 12 }}>
-                  {e.rol || "—"} · PIN: {e.pin}
+                  {e.rol || "—"} · PIN: ••••
                 </p>
               </div>
               <div style={{ textAlign: "right" }}>
@@ -222,6 +222,7 @@ function TabEmpleados({ G, colRef, tenantId, empleados }) {
 function EmpleadoForm({ G, colRef, tenantId, empleado, onDone }) {
   const [nombre, setNombre]       = useState(empleado?.nombre || "");
   const [pin, setPin]             = useState(empleado?.pin || "");
+  const [showPin, setShowPin]     = useState(false);
   const [rol, setRol]             = useState(empleado?.rol || "cajero");
   const [sueldoBase, setSueldo]   = useState(String(empleado?.sueldoBase || ""));
   const [horaEntrada, setHE]      = useState(empleado?.horaEntrada || "08:00");
@@ -284,7 +285,30 @@ function EmpleadoForm({ G, colRef, tenantId, empleado, onDone }) {
           </div>
           <div>
             <Label G={G}>PIN (4 dígitos)</Label>
-            <Input G={G} value={pin} onChange={e => setPin(e.target.value.slice(0,4))} placeholder="1234" maxLength={4} inputMode="numeric" />
+            <div style={{ position: "relative" }}>
+              <Input
+                G={G}
+                type={showPin ? "text" : "password"}
+                value={pin}
+                onChange={e => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="••••"
+                maxLength={4}
+                inputMode="numeric"
+                style={{ paddingRight: 40 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin(p => !p)}
+                style={{
+                  position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", cursor: "pointer",
+                  color: G.textSub, fontSize: 15, lineHeight: 1, padding: 0,
+                }}
+                title={showPin ? "Ocultar PIN" : "Mostrar PIN"}
+              >
+                {showPin ? "🙈" : "👁️"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -377,6 +401,30 @@ function TabAsistencia({ G, colRef, tenantId, empleados }) {
   const [registros, setRegistros] = useState([]);
   const [loadingR, setLoadingR] = useState(true);
   const [registrando, setRegistrando] = useState({});
+  // Edición de hora: { id, campo: "hora", valor: "HH:MM" }
+  const [editando, setEditando] = useState(null);
+
+  const iniciarEdicion = (reg) => {
+    const d = reg.creadoEn.toDate();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    setEditando({ id: reg.id, valor: `${hh}:${mm}` });
+  };
+
+  const guardarEdicion = async () => {
+    if (!editando) return;
+    const reg = registros.find(r => r.id === editando.id);
+    if (!reg) { setEditando(null); return; }
+    const [hh, mm] = editando.valor.split(":").map(Number);
+    const nueva = reg.creadoEn.toDate();
+    nueva.setHours(hh, mm, 0, 0);
+    try {
+      await updateDoc(doc(db, "tenants", tenantId, "asistencia", editando.id), {
+        creadoEn: Timestamp.fromDate(nueva),
+      });
+    } catch (e) { console.error(e); alert("Error al actualizar la hora."); }
+    setEditando(null);
+  };
 
   const lunes = lunesDe(semana);
   const domingo = new Date(lunes); domingo.setDate(domingo.getDate() + 6); domingo.setHours(23, 59, 59, 999);
@@ -524,14 +572,50 @@ function TabAsistencia({ G, colRef, tenantId, empleados }) {
                         {!esDescanso && !falta && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
                             {entrada && (
-                              <span style={{ background: "#eafaf1", color: "#27ae60", borderRadius: 8, padding: "2px 7px", fontSize: 10, fontWeight: 800 }}>
-                                ↑ {fmtHora(entrada.creadoEn.toDate())}
-                              </span>
+                              editando?.id === entrada.id ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
+                                  <input
+                                    type="time"
+                                    value={editando.valor}
+                                    onChange={e => setEditando(p => ({ ...p, valor: e.target.value }))}
+                                    style={{ width: 80, padding: "2px 4px", borderRadius: 6, border: `1.5px solid ${G.gold}`, fontSize: 11, fontWeight: 800, color: G.dark }}
+                                  />
+                                  <div style={{ display: "flex", gap: 3 }}>
+                                    <button onClick={guardarEdicion} style={{ padding: "2px 7px", borderRadius: 6, border: "none", background: "#27ae60", color: "#fff", fontWeight: 800, fontSize: 10, cursor: "pointer" }}>✓</button>
+                                    <button onClick={() => setEditando(null)} style={{ padding: "2px 6px", borderRadius: 6, border: "none", background: "#eee", color: "#666", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>✕</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => iniciarEdicion(entrada)}
+                                  title="Editar hora de entrada"
+                                  style={{ background: "#eafaf1", color: "#27ae60", borderRadius: 8, padding: "2px 7px", fontSize: 10, fontWeight: 800, border: "none", cursor: "pointer" }}>
+                                  ↑ {fmtHora(entrada.creadoEn.toDate())}
+                                </button>
+                              )
                             )}
                             {salida && (
-                              <span style={{ background: "#fff8ee", color: "#e67e22", borderRadius: 8, padding: "2px 7px", fontSize: 10, fontWeight: 800 }}>
-                                ↓ {fmtHora(salida.creadoEn.toDate())}
-                              </span>
+                              editando?.id === salida.id ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
+                                  <input
+                                    type="time"
+                                    value={editando.valor}
+                                    onChange={e => setEditando(p => ({ ...p, valor: e.target.value }))}
+                                    style={{ width: 80, padding: "2px 4px", borderRadius: 6, border: `1.5px solid #e67e22`, fontSize: 11, fontWeight: 800, color: G.dark }}
+                                  />
+                                  <div style={{ display: "flex", gap: 3 }}>
+                                    <button onClick={guardarEdicion} style={{ padding: "2px 7px", borderRadius: 6, border: "none", background: "#e67e22", color: "#fff", fontWeight: 800, fontSize: 10, cursor: "pointer" }}>✓</button>
+                                    <button onClick={() => setEditando(null)} style={{ padding: "2px 6px", borderRadius: 6, border: "none", background: "#eee", color: "#666", fontWeight: 700, fontSize: 10, cursor: "pointer" }}>✕</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => iniciarEdicion(salida)}
+                                  title="Editar hora de salida"
+                                  style={{ background: "#fff8ee", color: "#e67e22", borderRadius: 8, padding: "2px 7px", fontSize: 10, fontWeight: 800, border: "none", cursor: "pointer" }}>
+                                  ↓ {fmtHora(salida.creadoEn.toDate())}
+                                </button>
+                              )
                             )}
                             {!entrada && !salida && (
                               <span style={{ color: "#ccc", fontSize: 11 }}>—</span>

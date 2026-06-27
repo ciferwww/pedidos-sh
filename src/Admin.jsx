@@ -317,12 +317,14 @@ function POS({ onPedidoCreado, G }) {
   const { colRef, tenantId, playAddToCart } = useTenant();
   const isMobile = window.innerWidth < 768;
   const [menu, setMenu] = useState({});
+  const [paquetes, setPaquetes] = useState([]); // paquetes (colección "paquetes")
   const [menuLoading, setMenuLoading] = useState(true);
   const [cat,setCat]=useState(null);
   const [cart,setCart]=useState([]);
   const [mesa,setMesa]=useState("");
   const [payment,setPayment]=useState("efectivo");
   const [showQuick,setShowQuick]=useState(null);
+  const [showPaqueteModal, setShowPaqueteModal] = useState(null); // paquete seleccionado
   const [tempProtein,setTempProtein]=useState(null);
   const [tempSauce,setTempSauce]=useState(null);
   const [tempAlga, setTempAlga] = useState(true);
@@ -371,10 +373,29 @@ function POS({ onPedidoCreado, G }) {
     return unsub;
   }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const categories = Object.keys(menu);
+  // Carga paquetes en vivo desde /tenants/{tenantId}/paquetes
   useEffect(() => {
-    if (categories.length > 0 && !menu[cat]) setCat(categories[0]);
-  }, [categories]); // eslint-disable-line react-hooks/exhaustive-deps
+    const unsub = onSnapshot(
+      colRef("paquetes"),
+      (snap) => {
+        const list = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(p => p.disponible !== false)
+          .sort((a, b) => (a.orden ?? 999) - (b.orden ?? 999));
+        setPaquetes(list);
+      },
+      () => {}
+    );
+    return unsub;
+  }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const categories = Object.keys(menu);
+  // Agrega "📦 Paquetes" como categoría virtual si hay paquetes disponibles
+  const allCategories = paquetes.length > 0 ? ["📦 Paquetes", ...categories] : categories;
+
+  useEffect(() => {
+    if (allCategories.length > 0 && !allCategories.includes(cat)) setCat(allCategories[0]);
+  }, [allCategories.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const subtotal=cart.reduce((s,i)=>s+i.subtotal,0);
   const totalFinal = discount.descuentoAplicado > 0 ? discount.totalFinal : subtotal;
@@ -471,7 +492,9 @@ function POS({ onPedidoCreado, G }) {
           salsa:i.salsa||"", bomba:i.bomba||false, extras:i.extras||[], platExtras:[],
           nota:i.nota||"", subtotal:i.subtotal,
           alga: i.alga ?? null,
-          preparacion: i.preparacion || ""
+          preparacion: i.preparacion || "",
+          esPaquete: i.esPaquete || false,
+          itemsPaquete: i.itemsPaquete || [],
         })),
         subtotal, descuentoAplicado, tipoDescuento,
         totalFinal: total, total,
@@ -651,7 +674,7 @@ function POS({ onPedidoCreado, G }) {
         {/* Categorías */}
         <div style={{display:"flex",overflowX:"auto",background:"#0e0b06",
           borderBottom:`1px solid ${G.gold}33`,scrollbarWidth:"none",padding:"0 8px",flexShrink:0}}>
-          {categories.map(c=>(
+          {allCategories.map(c=>(
             <button key={c} id={`pos-tab-${c}`} className="cat-tab" onClick={()=>setCat(c)} style={{
               padding:"12px 16px",border:"none",
               borderBottom:`3px solid ${cat===c?G.gold:"transparent"}`,
@@ -666,13 +689,66 @@ function POS({ onPedidoCreado, G }) {
         {menuLoading && (
           <p style={{textAlign:"center",color:"#8a7050",padding:40}}>Cargando menú…</p>
         )}
-        {!menuLoading && categories.length===0 && (
+        {!menuLoading && allCategories.length===0 && (
           <div style={{textAlign:"center",padding:50}}>
             <p style={{color:"#8a7050",fontSize:13}}>Todavía no hay productos en el menú.</p>
             <p style={{color:"#6b5a3a",fontSize:12}}>Ve a la pestaña "Menú" para agregar productos.</p>
           </div>
         )}
-        {!menuLoading && cat && (
+
+        {/* Vista especial: Paquetes */}
+        {!menuLoading && cat === "📦 Paquetes" && (
+          <div style={{padding:12,display:"grid",
+            gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,overflowY:"auto"}}>
+            {paquetes.map(pkg=>(
+              <button key={pkg.id} id={`pos-pkg-${pkg.id}`} className="pos-item-btn"
+                onClick={()=>setShowPaqueteModal(pkg)}
+                style={{
+                  background:"linear-gradient(145deg,#1a1508,#141009)",
+                  border:`1.5px solid ${G.gold}44`,borderRadius:12,
+                  padding:14,cursor:"pointer",textAlign:"left",
+                  transition:"all .18s",boxShadow:"0 2px 8px #00000040"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                  <span style={{fontSize:18}}>📦</span>
+                  <span style={{background:`${G.gold}22`,color:G.gold,borderRadius:6,
+                    padding:"1px 7px",fontSize:9,fontWeight:900,letterSpacing:.5}}>PAQUETE</span>
+                </div>
+                <p style={{color:G.goldLight,fontWeight:800,fontSize:14,margin:"0 0 4px",
+                  fontFamily:"Georgia,serif",lineHeight:1.25}}>{pkg.nombre}</p>
+                {pkg.descripcion && (
+                  <p style={{color:"#7a6040",fontSize:10.5,margin:"0 0 8px",lineHeight:1.35,
+                    overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,
+                    WebkitBoxOrient:"vertical"}}>{pkg.descripcion}</p>
+                )}
+                {pkg.items?.length > 0 && (
+                  <div style={{marginBottom:8}}>
+                    {pkg.items.slice(0,3).map((it,i)=>(
+                      <p key={i} style={{color:"#6a5030",fontSize:10,margin:"1px 0",
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        · {it.nombre}{it.cantidad > 1 ? ` ×${it.cantidad}` : ""}
+                      </p>
+                    ))}
+                    {pkg.items.length > 3 && (
+                      <p style={{color:"#5a4020",fontSize:9,margin:"2px 0 0",fontStyle:"italic"}}>
+                        +{pkg.items.length-3} más…
+                      </p>
+                    )}
+                  </div>
+                )}
+                <p style={{color:G.gold,fontWeight:900,fontSize:18,margin:0,
+                  fontFamily:"Georgia,serif"}}>${pkg.precio}</p>
+              </button>
+            ))}
+            {paquetes.length === 0 && (
+              <p style={{color:"#6a5030",fontSize:13,padding:20,gridColumn:"1/-1",textAlign:"center"}}>
+                No hay paquetes disponibles. Agrégalos desde la pestaña Menú → Paquetes.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Vista normal: productos regulares */}
+        {!menuLoading && cat && cat !== "📦 Paquetes" && (
           <div style={{padding:12,display:"grid",
             gridTemplateColumns:"repeat(auto-fill,minmax(168px,1fr))",gap:10,overflowY:"auto"}}>
             {(menu[cat]||[]).map(item=>(
@@ -737,6 +813,14 @@ function POS({ onPedidoCreado, G }) {
               <div style={{flex:1,minWidth:0}}>
                 <p style={{color:G.dark,fontWeight:700,fontSize:13,margin:"0 0 2px",
                   overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.nombre}</p>
+                {item.esPaquete && item.itemsPaquete?.length > 0 && (
+                  <div style={{margin:"2px 0 4px",padding:"4px 8px",background:"#fff8ee",borderRadius:6,
+                    border:"1px solid #e8d5a033"}}>
+                    {item.itemsPaquete.map((it,ii)=>(
+                      <p key={ii} style={{color:"#9a7a3a",fontSize:10,margin:"1px 0",lineHeight:1.3}}>· {it}</p>
+                    ))}
+                  </div>
+                )}
                 {item.preparacion&&<p style={{color:"#8a7050",fontSize:11,margin:"0 0 1px"}}>{item.preparacion}</p>}
                 {item.protein&&<p style={{color:"#8a7050",fontSize:11,margin:"0 0 1px"}}>{item.protein}</p>}
                 {item.salsa&&<p style={{color:"#8a7050",fontSize:11,margin:"0 0 1px"}}>{item.salsa}</p>}
@@ -883,6 +967,103 @@ function POS({ onPedidoCreado, G }) {
           </div>
         </div>
       </div>
+
+      {/* ─── Modal de paquete ─── */}
+      {showPaqueteModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(10,6,2,.75)",zIndex:500,
+          display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
+          <div style={{background:"#1a1108",borderRadius:18,padding:28,width:360,maxWidth:"94vw",
+            border:`1.5px solid ${G.gold}44`,boxShadow:`0 24px 60px #0008`}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
+                  <span style={{fontSize:18}}>📦</span>
+                  <span style={{background:`${G.gold}22`,color:G.gold,borderRadius:6,
+                    padding:"1px 7px",fontSize:9,fontWeight:900,letterSpacing:.5}}>PAQUETE</span>
+                </div>
+                <p style={{color:G.gold,fontWeight:900,fontFamily:"Georgia,serif",
+                  fontSize:17,margin:"0 0 3px"}}>{showPaqueteModal.nombre}</p>
+                {showPaqueteModal.descripcion && (
+                  <p style={{color:"#6a5030",fontSize:12,margin:0}}>{showPaqueteModal.descripcion}</p>
+                )}
+              </div>
+              <button onClick={()=>setShowPaqueteModal(null)} style={{background:"#ffffff0f",border:"none",
+                color:"#6b5a3a",cursor:"pointer",fontSize:18,borderRadius:8,width:30,height:30,
+                display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+
+            {/* Items incluidos */}
+            <div style={{background:"#110d06",borderRadius:10,padding:"10px 14px",marginBottom:16,
+              border:`1px solid ${G.gold}22`}}>
+              <p style={{color:"#8a7050",fontSize:10,fontWeight:800,margin:"0 0 8px",letterSpacing:1}}>
+                INCLUYE</p>
+              {(showPaqueteModal.items||[]).map((it,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",
+                  padding:"5px 0",borderBottom:i<showPaqueteModal.items.length-1?`1px solid #2a1f0d11`:"none"}}>
+                  <span style={{color:"#c9b07a",fontSize:13,fontWeight:700}}>
+                    {it.cantidad > 1 ? `${it.cantidad}× ` : ""}{it.nombre}
+                  </span>
+                  {it.descripcion && (
+                    <span style={{color:"#6a5030",fontSize:11}}>{it.descripcion}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+              padding:"10px 14px",borderRadius:10,background:"#110d06",marginBottom:16,
+              border:`1px solid ${G.gold}22`}}>
+              <p style={{color:"#9a7a3a",fontWeight:800,fontSize:12,margin:0}}>PRECIO DEL PAQUETE</p>
+              <p style={{color:G.gold,fontWeight:900,fontSize:22,margin:0,
+                fontFamily:"Georgia,serif"}}>${showPaqueteModal.precio}</p>
+            </div>
+
+            {/* Nota opcional */}
+            <div style={{marginBottom:16}}>
+              <p style={{color:"#9a7a3a",fontSize:10,fontWeight:800,margin:"0 0 6px",letterSpacing:1.5}}>
+                NOTA (opcional)</p>
+              <input
+                value={tempNota} onChange={e=>setTempNota(e.target.value)}
+                placeholder="Instrucciones especiales…"
+                style={{width:"100%",boxSizing:"border-box",padding:"8px 12px",borderRadius:9,
+                  border:"1.5px solid #3a2e1a",background:"#2a1f0d",color:"#e8d5a0",
+                  fontSize:13,fontFamily:"inherit",outline:"none"}}
+              />
+            </div>
+
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setShowPaqueteModal(null);setTempNota("");}} style={{
+                flex:1,padding:"10px",borderRadius:10,
+                border:"1.5px solid #3a2e1a",background:"transparent",cursor:"pointer",
+                color:"#7a6040",fontWeight:700,fontSize:13}}>Cancelar</button>
+              <button onClick={()=>{
+                const pkg = showPaqueteModal;
+                playAddToCart();
+                setCart(prev=>[...prev,{
+                  id:`pkg-${pkg.id}-${Date.now()}`,
+                  nombre:`📦 ${pkg.nombre}`,
+                  precio:pkg.precio,
+                  cantidad:1,
+                  subtotal:pkg.precio,
+                  protein:"",salsa:"",alga:null,preparacion:"",
+                  nota:tempNota||"",
+                  bomba:false,extras:[],
+                  esPaquete:true,
+                  itemsPaquete:(pkg.items||[]).map(it=>`${it.cantidad>1?it.cantidad+"× ":""}${it.nombre}`),
+                }]);
+                setShowPaqueteModal(null);
+                setTempNota("");
+              }} style={{
+                flex:2,padding:"10px",borderRadius:10,border:"none",
+                background:`linear-gradient(135deg,${G.gold},${G.goldLight})`,
+                color:G.dark,fontWeight:900,cursor:"pointer",fontSize:14,
+                boxShadow:`0 4px 16px ${G.gold}44`}}>
+                Agregar al pedido ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showWAModal && (
         <WAPedidoModal
@@ -1533,67 +1714,86 @@ function Dashboard({ empleado, onLogout }) {
         .dash-tab:hover{color:${G.gold} !important;background:#ffffff12 !important;}
       `}</style>
 
-      {/* Header */}
-      <div style={{background:G.dark,padding:"0 20px",borderBottom:`2px solid ${G.gold}44`,
-        display:"flex",alignItems:"center",height:62,boxSizing:"border-box",flexWrap:"wrap",gap:6,
-        boxShadow:"0 2px 16px #00000044"}}>
-        <p style={{color:G.gold,fontFamily:"Georgia,serif",fontSize:18,fontWeight:900,margin:0,letterSpacing:2.5}}>
-          {(brand?.nombre || "PANEL").toUpperCase()}</p>
-        <span style={{color:"#8a7a5a",fontSize:10,fontWeight:700,letterSpacing:1.5,marginLeft:-2}}>
-          PANEL ADMINISTRATIVO
-        </span>
+      {/* Header — dos filas para no amontonar */}
+      <div style={{background:G.dark,borderBottom:`2px solid ${G.gold}33`,
+        boxShadow:"0 2px 16px #00000044",position:"sticky",top:0,zIndex:100}}>
 
-        {/* Tenant badge */}
-        <span style={{background:"#ffffff10",color:"#6a5a3a",borderRadius:6,
-          padding:"2px 8px",fontSize:10,fontWeight:700,border:"1px solid #2a2010",marginLeft:2}}>
-          {tenantId}
-        </span>
+        {/* Fila superior: marca + info + alertas + usuario + salir */}
+        <div style={{display:"flex",alignItems:"center",padding:"8px 20px",gap:10,
+          borderBottom:`1px solid #2a201044`}}>
+          {/* Marca */}
+          <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+            <p style={{color:G.gold,fontFamily:"Georgia,serif",fontSize:17,fontWeight:900,
+              margin:0,letterSpacing:2,whiteSpace:"nowrap"}}>
+              {(brand?.nombre || "PANEL").toUpperCase()}
+            </p>
+            <span style={{color:"#5a4a2a",fontSize:9,fontWeight:700,letterSpacing:1.5}}>ADMIN</span>
+            <span style={{background:"#ffffff0e",color:"#5a4a2a",borderRadius:5,
+              padding:"1px 6px",fontSize:9,fontWeight:700,border:"1px solid #2a2010"}}>
+              {tenantId}
+            </span>
+          </div>
 
-        {/* Pausa badge */}
-        {pausado && (
-          <span style={{
-            background:"#c0392b",color:"#fff",borderRadius:8,
-            padding:"3px 12px",fontSize:11,fontWeight:900,
-            animation:"badgePulse 1.2s ease infinite",border:"1px solid #e74c3c",letterSpacing:.5
-          }}>PAUSADO</span>
-        )}
+          {/* Alertas */}
+          {pausado && (
+            <span style={{background:"#c0392b",color:"#fff",borderRadius:7,
+              padding:"2px 10px",fontSize:11,fontWeight:900,
+              animation:"badgePulse 1.2s ease infinite",border:"1px solid #e74c3c"}}>⏸ PAUSADO</span>
+          )}
+          {hayNuevos && !pausado && (
+            <span style={{background:"#c0392b",color:"#fff",borderRadius:7,
+              padding:"2px 10px",fontSize:11,fontWeight:900,
+              animation:"beepRing 1.5s ease infinite"}}>
+              🔔 {counts.nuevo} NUEVO{counts.nuevo>1?"S":""}
+            </span>
+          )}
 
-        {/* New order bell */}
-        {hayNuevos && !pausado && (
-          <span style={{
-            background:"#c0392b",color:"#fff",borderRadius:8,
-            padding:"3px 12px",fontSize:11,fontWeight:900,
-            animation:"beepRing 1.5s ease infinite",letterSpacing:.5
-          }}>{counts.nuevo} NUEVO{counts.nuevo>1?"S":""}</span>
-        )}
+          {/* Métricas rápidas */}
+          <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:16}}>
+            {empleado.rol==="jefe" && (
+              <div style={{textAlign:"right"}}>
+                <p style={{color:"#5a4a2a",fontSize:8,margin:0,letterSpacing:1,fontWeight:700}}>VENTAS HOY</p>
+                <p style={{color:"#9fd9a8",fontWeight:900,fontSize:14,margin:0,fontFamily:"Georgia,serif"}}>
+                  ${ventasHoy.toLocaleString()}</p>
+              </div>
+            )}
+            <div style={{textAlign:"right"}}>
+              <p style={{color:"#5a4a2a",fontSize:8,margin:0,letterSpacing:1,fontWeight:700}}>PENDIENTE</p>
+              <p style={{color:G.gold,fontWeight:900,fontSize:14,margin:0,fontFamily:"Georgia,serif"}}>
+                ${pendiente.toLocaleString()}</p>
+            </div>
+            <div style={{textAlign:"right",borderLeft:"1px solid #2a2010",paddingLeft:12}}>
+              <p style={{color:"#5a4a2a",fontSize:8,margin:0,letterSpacing:1,fontWeight:700}}>USUARIO</p>
+              <p style={{color:"#8a7a5a",fontSize:11,margin:0,fontWeight:700}}>
+                {empleado.nombre} <span style={{color:"#4a3a2a",fontSize:9}}>· {empleado.rol}</span>
+              </p>
+            </div>
+            <button id="btn-logout" onClick={onLogout} style={{background:"none",
+              border:`1px solid #2a2010`,borderRadius:7,color:"#6a5a3a",
+              padding:"4px 10px",fontSize:11,cursor:"pointer",transition:"all .15s",
+              whiteSpace:"nowrap"}}>Salir</button>
+          </div>
+        </div>
 
-        <div style={{display:"flex",gap:2,marginLeft:isMobile?0:20,flexWrap:"wrap",
-          background:"#ffffff0a",borderRadius:10,padding:"4px",border:"1px solid #2a2010"}}>
+        {/* Fila inferior: navegación de tabs */}
+        <div style={{display:"flex",gap:1,padding:"0 16px",overflowX:"auto",scrollbarWidth:"none"}}>
           {TABS.map(t=>(
             <button key={t.key} id={`tab-${t.key}`} className="dash-tab" onClick={()=>setTab(t.key)} style={{
-              padding:"5px 14px",borderRadius:7,border:"none",cursor:"pointer",
-              fontSize:12,fontWeight:700,transition:"all .18s",letterSpacing:.3,
-              background:tab===t.key?G.gold:"transparent",
-              color:tab===t.key?G.dark:"#8a7a5a"}}>{t.label}</button>
+              padding:"9px 16px",border:"none",cursor:"pointer",
+              borderBottom:`3px solid ${tab===t.key?G.gold:"transparent"}`,
+              background:"transparent",
+              color:tab===t.key?G.gold:"#5a4a2a",
+              fontSize:12,fontWeight:700,transition:"all .18s",
+              letterSpacing:.3,whiteSpace:"nowrap"}}>
+              {t.label}
+              {t.key==="pedidos" && counts.nuevo>0 && (
+                <span style={{background:"#c0392b",color:"#fff",borderRadius:10,
+                  padding:"1px 5px",fontSize:9,fontWeight:900,marginLeft:5}}>
+                  {counts.nuevo}
+                </span>
+              )}
+            </button>
           ))}
-        </div>
-        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:14}}>
-          {empleado.rol==="jefe" && (
-            <div style={{textAlign:"right"}}>
-              <p style={{color:"#8a7a5a",fontSize:9,margin:0,letterSpacing:1}}>VENTAS HOY</p>
-              <p style={{color:"#9fd9a8",fontWeight:900,fontSize:15,margin:0,fontFamily:"Georgia,serif"}}>
-                ${ventasHoy.toLocaleString()}</p>
-            </div>
-          )}
-          <div style={{textAlign:"right"}}>
-            <p style={{color:"#8a7a5a",fontSize:9,margin:0,letterSpacing:1}}>{empleado.nombre} · {empleado.rol}</p>
-            <p style={{color:"#8a7a5a",fontSize:9,margin:0,letterSpacing:1}}>PENDIENTE</p>
-            <p style={{color:G.gold,fontWeight:900,fontSize:16,margin:0,fontFamily:"Georgia,serif"}}>
-              ${pendiente.toLocaleString()}</p>
-          </div>
-          <button id="btn-logout" onClick={onLogout} style={{background:"none",border:`1px solid #2a2010`,
-            borderRadius:8,color:"#8a7a5a",padding:"5px 12px",fontSize:12,cursor:"pointer",
-            transition:"all .15s"}}>Salir</button>
         </div>
       </div>
 

@@ -4,6 +4,20 @@ import {
 } from "firebase/firestore";
 import { useTenant, useTenantConfig } from "./TenantContext";
 
+// ── Esquema de un paquete en /tenants/{tenantId}/paquetes:
+// {
+//   nombre: "Paquete familiar",
+//   descripcion: "Para 4 personas",
+//   precio: 450,
+//   disponible: true,
+//   orden: 0,
+//   items: [
+//     { nombre: "Shekinah Roll", cantidad: 2, descripcion: "" },
+//     { nombre: "Boneless", cantidad: 1, descripcion: "500g" },
+//   ],
+//   creadoEn, actualizadoEn
+// }
+
 // ── GestorMenu ──────────────────────────────────────────────────────────
 // Panel del admin (rol "jefe") para administrar el catálogo real de
 // productos que consumen tanto el menú del cliente (App.jsx) como el
@@ -53,6 +67,7 @@ export default function GestorMenu() {
   const { colRef, tenantId } = useTenant();
   const { colors: G } = useTenantConfig();
 
+  const [vistaTab, setVistaTab] = useState("productos"); // "productos" | "paquetes"
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [catFiltro, setCatFiltro] = useState("Todas");
@@ -60,6 +75,65 @@ export default function GestorMenu() {
   const [editing, setEditing] = useState(null); // producto en edición (o null)
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState(null);
+
+  // ── Estado de paquetes ──
+  const [paquetes, setPaquetes] = useState([]);
+  const [loadingPkgs, setLoadingPkgs] = useState(true);
+  const [editingPkg, setEditingPkg] = useState(null);
+  const [creatingPkg, setCreatingPkg] = useState(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(colRef("paquetes"), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (a.orden ?? 999) - (b.orden ?? 999));
+      setPaquetes(list);
+      setLoadingPkgs(false);
+    }, () => setLoadingPkgs(false));
+    return unsub;
+  }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const savePaquete = async (data) => {
+    try {
+      const payload = {
+        nombre: data.nombre.trim(),
+        descripcion: (data.descripcion || "").trim(),
+        precio: Number(data.precio) || 0,
+        orden: Number(data.orden) || 0,
+        disponible: !!data.disponible,
+        items: (data.items || []).filter(it => it.nombre.trim()),
+        actualizadoEn: serverTimestamp(),
+      };
+      if (data.id) {
+        await updateDoc(doc(colRef("paquetes"), data.id), payload);
+        showToast("Paquete actualizado ✓");
+      } else {
+        payload.creadoEn = serverTimestamp();
+        await addDoc(colRef("paquetes"), payload);
+        showToast("Paquete creado ✓");
+      }
+      setEditingPkg(null);
+      setCreatingPkg(false);
+    } catch (e) {
+      console.error(e);
+      showToast("Error al guardar paquete.", false);
+    }
+  };
+
+  const deletePaquete = async (pkg) => {
+    if (!window.confirm(`¿Eliminar el paquete "${pkg.nombre}"?`)) return;
+    try {
+      await deleteDoc(doc(colRef("paquetes"), pkg.id));
+      showToast("Paquete eliminado");
+    } catch (e) {
+      showToast("No se pudo eliminar.", false);
+    }
+  };
+
+  const toggleDisponiblePkg = async (pkg) => {
+    try {
+      await updateDoc(doc(colRef("paquetes"), pkg.id), { disponible: !pkg.disponible });
+    } catch (e) { console.error(e); }
+  };
 
   useEffect(() => {
     const unsub = onSnapshot(colRef("productos"), (snap) => {
@@ -159,7 +233,7 @@ export default function GestorMenu() {
       `}</style>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
         <div>
           <h2 style={{ color: G.dark, fontFamily: "Georgia,serif", margin: "0 0 2px" }}>🍽️ Gestor de Menú</h2>
           <p style={{ color: G.textSub, fontSize: 12, margin: 0 }}>
@@ -167,17 +241,33 @@ export default function GestorMenu() {
           </p>
         </div>
         <button
-          id="btn-nuevo-producto"
+          id={vistaTab === "productos" ? "btn-nuevo-producto" : "btn-nuevo-paquete"}
           className="gm-add-btn"
-          onClick={() => setCreating(true)}
+          onClick={() => vistaTab === "productos" ? setCreating(true) : setCreatingPkg(true)}
           style={{
             padding: "11px 20px", borderRadius: 10, border: "none", cursor: "pointer",
             background: `linear-gradient(135deg,${G.gold},${G.goldLight})`, color: G.dark,
             fontWeight: 900, fontSize: 14, boxShadow: `0 4px 16px ${G.gold}44`, transition: "all .15s",
             whiteSpace: "nowrap",
           }}>
-          + Nuevo producto
+          {vistaTab === "productos" ? "+ Nuevo producto" : "+ Nuevo paquete"}
         </button>
+      </div>
+
+      {/* Tabs: Productos / Paquetes */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 16, background: "#f5f1ea",
+        borderRadius: 10, padding: 4, width: "fit-content", border: `1px solid ${G.divider}` }}>
+        {[
+          { key: "productos", label: "🍽️ Productos" },
+          { key: "paquetes",  label: "📦 Paquetes" },
+        ].map(t => (
+          <button key={t.key} onClick={() => setVistaTab(t.key)} style={{
+            padding: "7px 18px", borderRadius: 8, border: "none", cursor: "pointer",
+            fontSize: 13, fontWeight: 700, transition: "all .15s",
+            background: vistaTab === t.key ? G.gold : "transparent",
+            color: vistaTab === t.key ? G.dark : G.textSub,
+          }}>{t.label}</button>
+        ))}
       </div>
 
       {/* Toast */}
@@ -192,72 +282,164 @@ export default function GestorMenu() {
         </div>
       )}
 
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <input
-          id="gm-busqueda"
-          value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-          placeholder="🔍 Buscar producto…"
-          style={{
-            flex: "1 1 220px", padding: "9px 14px", borderRadius: 9, border: `1.5px solid ${G.divider}`,
-            fontSize: 13, fontFamily: "inherit", color: G.dark, outline: "none",
-          }}
-        />
-        <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
-          {["Todas", ...categorias].map(c => (
-            <button key={c} className="gm-cat-btn" onClick={() => setCatFiltro(c)} style={{
-              padding: "7px 14px", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap",
-              border: `1.5px solid ${catFiltro === c ? G.gold : G.divider}`,
-              background: catFiltro === c ? G.gold : "#fff",
-              color: catFiltro === c ? G.dark : G.textSub,
-              fontWeight: 700, fontSize: 12, transition: "all .15s",
-            }}>{c}</button>
+      {/* ── VISTA PRODUCTOS ── */}
+      {vistaTab === "productos" && (<>
+        {/* Filtros */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            id="gm-busqueda"
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            placeholder="🔍 Buscar producto…"
+            style={{
+              flex: "1 1 220px", padding: "9px 14px", borderRadius: 9, border: `1.5px solid ${G.divider}`,
+              fontSize: 13, fontFamily: "inherit", color: G.dark, outline: "none",
+            }}
+          />
+          <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 2 }}>
+            {["Todas", ...categorias].map(c => (
+              <button key={c} className="gm-cat-btn" onClick={() => setCatFiltro(c)} style={{
+                padding: "7px 14px", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap",
+                border: `1.5px solid ${catFiltro === c ? G.gold : G.divider}`,
+                background: catFiltro === c ? G.gold : "#fff",
+                color: catFiltro === c ? G.dark : G.textSub,
+                fontWeight: 700, fontSize: 12, transition: "all .15s",
+              }}>{c}</button>
+            ))}
+          </div>
+        </div>
+
+        {loading && <p style={{ textAlign: "center", color: G.textSub, padding: 40 }}>Cargando productos…</p>}
+
+        {!loading && visibles.length === 0 && (
+          <div style={{ textAlign: "center", padding: "50px 20px" }}>
+            <p style={{ fontSize: 38, margin: "0 0 8px" }}>🍱</p>
+            <p style={{ color: G.textSub, margin: "0 0 16px" }}>
+              {productos.length === 0 ? "Todavía no hay productos en el menú." : "Nada coincide con tu búsqueda."}
+            </p>
+            {productos.length === 0 && (
+              <button onClick={() => setCreating(true)} style={{
+                padding: "10px 20px", borderRadius: 9, border: "none", cursor: "pointer",
+                background: G.gold, color: G.dark, fontWeight: 800, fontSize: 13,
+              }}>+ Agregar el primer producto</button>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 14 }}>
+          {visibles.map(p => (
+            <ProductCard
+              key={p.id}
+              producto={p}
+              G={G}
+              onEdit={() => setEditing(p)}
+              onDelete={() => handleDelete(p)}
+              onToggleDisponible={() => toggleDisponible(p)}
+            />
           ))}
         </div>
-      </div>
 
-      {/* Grid de productos */}
-      {loading && <p style={{ textAlign: "center", color: G.textSub, padding: 40 }}>Cargando productos…</p>}
+        {(editing || creating) && (
+          <ProductEditor
+            producto={editing || EMPTY_PRODUCT}
+            categoriasSugeridas={categorias}
+            G={G}
+            onClose={() => { setEditing(null); setCreating(false); }}
+            onSave={handleSave}
+          />
+        )}
+      </>)}
 
-      {!loading && visibles.length === 0 && (
-        <div style={{ textAlign: "center", padding: "50px 20px" }}>
-          <p style={{ fontSize: 38, margin: "0 0 8px" }}>🍱</p>
-          <p style={{ color: G.textSub, margin: "0 0 16px" }}>
-            {productos.length === 0 ? "Todavía no hay productos en el menú." : "Nada coincide con tu búsqueda."}
+      {/* ── VISTA PAQUETES ── */}
+      {vistaTab === "paquetes" && (<>
+        <div style={{ background: "#fff8ee", borderRadius: 10, padding: "10px 14px",
+          border: `1px solid ${G.divider}`, marginBottom: 16 }}>
+          <p style={{ color: G.textSub, fontSize: 12, margin: 0 }}>
+            Los paquetes combinan varios platillos a un precio especial. Aparecen en la pestaña
+            <strong> 📦 Paquetes</strong> del Punto de Venta y pueden mostrarse en el menú del cliente.
           </p>
-          {productos.length === 0 && (
-            <button onClick={() => setCreating(true)} style={{
+        </div>
+
+        {loadingPkgs && <p style={{ color: G.textSub, textAlign: "center", padding: 40 }}>Cargando paquetes…</p>}
+
+        {!loadingPkgs && paquetes.length === 0 && (
+          <div style={{ textAlign: "center", padding: "50px 20px" }}>
+            <p style={{ fontSize: 38, margin: "0 0 8px" }}>📦</p>
+            <p style={{ color: G.textSub, margin: "0 0 16px" }}>Todavía no hay paquetes.</p>
+            <button onClick={() => setCreatingPkg(true)} style={{
               padding: "10px 20px", borderRadius: 9, border: "none", cursor: "pointer",
               background: G.gold, color: G.dark, fontWeight: 800, fontSize: 13,
-            }}>+ Agregar el primer producto</button>
-          )}
+            }}>+ Crear el primer paquete</button>
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 14 }}>
+          {paquetes.map(pkg => (
+            <div key={pkg.id} className="gm-card" style={{
+              background: G.cardBg, borderRadius: 14, overflow: "hidden",
+              border: `1.5px solid ${G.divider}`, boxShadow: "0 2px 10px #0001",
+              opacity: pkg.disponible === false ? 0.6 : 1,
+            }}>
+              <div style={{ background: `${G.gold}14`, padding: "14px 16px 10px",
+                borderBottom: `1px solid ${G.divider}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+                  <span style={{ fontSize: 20 }}>📦</span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ color: G.dark, fontWeight: 900, fontSize: 15, margin: 0,
+                      fontFamily: "Georgia,serif" }}>{pkg.nombre}</p>
+                    {pkg.descripcion && <p style={{ color: G.textSub, fontSize: 12, margin: "2px 0 0" }}>{pkg.descripcion}</p>}
+                  </div>
+                  <p style={{ color: G.gold, fontWeight: 900, fontSize: 20, margin: 0,
+                    fontFamily: "Georgia,serif" }}>${pkg.precio}</p>
+                </div>
+                {pkg.disponible === false && (
+                  <span style={{ background: "#c0392b", color: "#fff", fontSize: 10,
+                    fontWeight: 800, padding: "2px 8px", borderRadius: 8 }}>OCULTO</span>
+                )}
+              </div>
+              <div style={{ padding: "12px 16px" }}>
+                <p style={{ color: G.textSub, fontSize: 10, fontWeight: 800, margin: "0 0 7px",
+                  letterSpacing: 1 }}>INCLUYE</p>
+                {(pkg.items || []).map((it, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between",
+                    padding: "4px 0", borderBottom: i < pkg.items.length - 1 ? `1px solid ${G.divider}44` : "none" }}>
+                    <span style={{ color: G.dark, fontSize: 13, fontWeight: 700 }}>
+                      {it.cantidad > 1 ? `${it.cantidad}× ` : ""}{it.nombre}
+                    </span>
+                    {it.descripcion && <span style={{ color: G.textSub, fontSize: 11 }}>{it.descripcion}</span>}
+                  </div>
+                ))}
+                {(!pkg.items || pkg.items.length === 0) && (
+                  <p style={{ color: G.textSub, fontSize: 12, fontStyle: "italic" }}>Sin items definidos</p>
+                )}
+                <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+                  <button onClick={() => toggleDisponiblePkg(pkg)} title={pkg.disponible===false?"Mostrar":"Ocultar"} style={{
+                    border: `1.5px solid ${G.divider}`, background: "#fff", borderRadius: 8,
+                    cursor: "pointer", padding: "5px 8px", fontSize: 13,
+                  }}>{pkg.disponible === false ? "🙈" : "👁️"}</button>
+                  <button onClick={() => setEditingPkg(pkg)} style={{
+                    flex: 1, border: `1.5px solid ${G.gold}`, background: "transparent", color: G.gold,
+                    borderRadius: 8, cursor: "pointer", padding: "5px 8px", fontSize: 13, fontWeight: 700,
+                  }}>✏️ Editar</button>
+                  <button onClick={() => deletePaquete(pkg)} style={{
+                    border: "1.5px solid #e74c3c44", background: "transparent", color: "#c0392b",
+                    borderRadius: 8, cursor: "pointer", padding: "5px 8px", fontSize: 13,
+                  }}>🗑️</button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 14 }}>
-        {visibles.map(p => (
-          <ProductCard
-            key={p.id}
-            producto={p}
+        {(editingPkg || creatingPkg) && (
+          <PaqueteEditor
+            paquete={editingPkg || { nombre:"", descripcion:"", precio:"", orden:0, disponible:true, items:[] }}
             G={G}
-            onEdit={() => setEditing(p)}
-            onDelete={() => handleDelete(p)}
-            onToggleDisponible={() => toggleDisponible(p)}
+            onClose={() => { setEditingPkg(null); setCreatingPkg(false); }}
+            onSave={savePaquete}
           />
-        ))}
-      </div>
-
-      {/* Editor modal (crear o editar) */}
-      {(editing || creating) && (
-        <ProductEditor
-          producto={editing || EMPTY_PRODUCT}
-          categoriasSugeridas={categorias}
-          G={G}
-          onClose={() => { setEditing(null); setCreating(false); }}
-          onSave={handleSave}
-        />
-      )}
+        )}
+      </>)}
     </div>
   );
 }
@@ -540,3 +722,147 @@ const smallBtnStyle = (G) => ({
   padding: "7px 12px", borderRadius: 8, border: `1.5px solid ${G.gold}`, background: "transparent",
   color: G.gold, fontWeight: 700, fontSize: 12, cursor: "pointer",
 });
+
+// ── PaqueteEditor ────────────────────────────────────────────────────
+function PaqueteEditor({ paquete, G, onClose, onSave }) {
+  const [form, setForm] = useState({ ...paquete });
+  const [saving, setSaving] = useState(false);
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const setItem = (i, k, v) => {
+    const items = [...(form.items || [])];
+    items[i] = { ...items[i], [k]: v };
+    set("items", items);
+  };
+  const addItem = () => set("items", [...(form.items || []), { nombre: "", cantidad: 1, descripcion: "" }]);
+  const removeItem = (i) => set("items", (form.items || []).filter((_, j) => j !== i));
+
+  const handleSubmit = async () => {
+    if (!form.nombre?.trim()) { alert("El nombre del paquete es obligatorio."); return; }
+    if (!form.precio || Number(form.precio) <= 0) { alert("Ingresa un precio válido."); return; }
+    if (!form.items?.some(it => it.nombre?.trim())) { alert("Agrega al menos un item al paquete."); return; }
+    setSaving(true);
+    await onSave(form);
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(10,6,2,.7)", zIndex: 9998,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      backdropFilter: "blur(3px)", padding: 16 }}>
+      <div style={{ background: G.offWhite, borderRadius: 18, width: "100%", maxWidth: 520,
+        maxHeight: "92vh", overflowY: "auto", border: `1.5px solid ${G.gold}55`,
+        boxShadow: "0 24px 60px #0008" }}>
+
+        {/* Header */}
+        <div style={{ padding: "18px 22px", borderBottom: `1px solid ${G.divider}`,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          position: "sticky", top: 0, background: G.offWhite, zIndex: 1 }}>
+          <p style={{ margin: 0, fontWeight: 900, color: G.dark, fontSize: 16, fontFamily: "Georgia,serif" }}>
+            {paquete.id ? "✏️ Editar paquete" : "📦 Nuevo paquete"}
+          </p>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: G.textSub }}>✕</button>
+        </div>
+
+        <div style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+
+          {/* Nombre */}
+          <div>
+            <FieldLabel G={G}>Nombre del paquete</FieldLabel>
+            <input value={form.nombre || ""} onChange={e => set("nombre", e.target.value)}
+              style={inputStyle(G)} placeholder="Ej. Paquete familiar" />
+          </div>
+
+          {/* Descripción */}
+          <div>
+            <FieldLabel G={G}>Descripción (opcional)</FieldLabel>
+            <input value={form.descripcion || ""} onChange={e => set("descripcion", e.target.value)}
+              style={inputStyle(G)} placeholder="Ej. Para 4 personas" />
+          </div>
+
+          {/* Precio / Orden */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 2 }}>
+              <FieldLabel G={G}>Precio total del paquete ($)</FieldLabel>
+              <input type="number" min="0" value={form.precio || ""} onChange={e => set("precio", e.target.value)}
+                style={{ ...inputStyle(G), fontFamily: "Georgia,serif", fontWeight: 900, fontSize: 18 }}
+                placeholder="0" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <FieldLabel G={G}>Orden</FieldLabel>
+              <input type="number" value={form.orden ?? 0} onChange={e => set("orden", e.target.value)}
+                style={inputStyle(G)} />
+            </div>
+          </div>
+
+          {/* Disponible */}
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={form.disponible !== false}
+              onChange={e => set("disponible", e.target.checked)} />
+            <span style={{ fontSize: 13, color: G.dark, fontWeight: 700 }}>
+              Visible en el punto de venta y menú del cliente
+            </span>
+          </label>
+
+          {/* Items */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <FieldLabel G={G}>Items incluidos en el paquete</FieldLabel>
+              <button type="button" onClick={addItem} style={{
+                background: G.gold, border: "none", borderRadius: 7, padding: "4px 12px",
+                color: G.dark, fontWeight: 800, fontSize: 12, cursor: "pointer",
+              }}>+ Agregar item</button>
+            </div>
+
+            {(form.items || []).map((it, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                <div style={{ width: 56, flexShrink: 0 }}>
+                  <p style={{ color: G.textSub, fontSize: 9, fontWeight: 800, margin: "0 0 3px", letterSpacing: .5 }}>CANT</p>
+                  <input type="number" min="1" value={it.cantidad || 1}
+                    onChange={e => setItem(i, "cantidad", parseInt(e.target.value) || 1)}
+                    style={{ ...inputStyle(G), padding: "7px 8px", textAlign: "center",
+                      fontWeight: 900, fontSize: 14 }} />
+                </div>
+                <div style={{ flex: 2 }}>
+                  <p style={{ color: G.textSub, fontSize: 9, fontWeight: 800, margin: "0 0 3px", letterSpacing: .5 }}>NOMBRE</p>
+                  <input value={it.nombre || ""} onChange={e => setItem(i, "nombre", e.target.value)}
+                    style={inputStyle(G)} placeholder="Ej. Shekinah roll" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ color: G.textSub, fontSize: 9, fontWeight: 800, margin: "0 0 3px", letterSpacing: .5 }}>DETALLE</p>
+                  <input value={it.descripcion || ""} onChange={e => setItem(i, "descripcion", e.target.value)}
+                    style={inputStyle(G)} placeholder="Ej. 500g" />
+                </div>
+                <button onClick={() => removeItem(i)} style={{
+                  background: "none", border: "none", color: "#c0392b",
+                  fontSize: 18, cursor: "pointer", padding: "0 4px", marginTop: 16, flexShrink: 0,
+                }}>✕</button>
+              </div>
+            ))}
+
+            {(!form.items || form.items.length === 0) && (
+              <div style={{ textAlign: "center", padding: "20px 0", color: G.textSub, fontSize: 12 }}>
+                Agrega los platillos o artículos que incluye este paquete.
+              </div>
+            )}
+          </div>
+
+          {/* Botones */}
+          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <button onClick={onClose} style={{
+              flex: 1, padding: "12px", borderRadius: 10, border: `1.5px solid ${G.divider}`,
+              background: "transparent", color: G.textSub, fontWeight: 700, fontSize: 14, cursor: "pointer",
+            }}>Cancelar</button>
+            <button onClick={handleSubmit} disabled={saving} style={{
+              flex: 2, padding: "12px", borderRadius: 10, border: "none",
+              background: saving ? "#d4cfc6" : `linear-gradient(135deg,${G.gold},${G.goldLight})`,
+              color: G.dark, fontWeight: 900, fontSize: 14, cursor: saving ? "not-allowed" : "pointer",
+              boxShadow: saving ? "none" : `0 4px 16px ${G.gold}44`,
+            }}>{saving ? "Guardando…" : "Guardar paquete"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

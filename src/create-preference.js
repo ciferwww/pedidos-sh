@@ -25,8 +25,25 @@ export default async function handler(req, res) {
     if (!tenantId || !name || !phone || !Array.isArray(cart) || cart.length === 0) {
       return res.status(400).json({ error: "Datos del pedido incompletos." });
     }
-    if (!process.env.MP_ACCESS_TOKEN) {
-      return res.status(500).json({ error: "Falta configurar MP_ACCESS_TOKEN en el servidor." });
+
+    // ── Validación de variables de entorno requeridas ────────────────────
+    const missingVars = [];
+    if (!process.env.MP_ACCESS_TOKEN)                  missingVars.push("MP_ACCESS_TOKEN");
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT_BASE64)  missingVars.push("FIREBASE_SERVICE_ACCOUNT_BASE64");
+    if (missingVars.length > 0) {
+      console.error("[create-preference] Faltan variables de entorno:", missingVars);
+      return res.status(500).json({
+        error: `Configuración incompleta en el servidor. Variables faltantes: ${missingVars.join(", ")}. ` +
+               `Agrégalas en Vercel → Project Settings → Environment Variables y haz un nuevo deploy.`,
+      });
+    }
+
+    // Detectar token de prueba vs producción y avisar si no coincide con la URL
+    const token = process.env.MP_ACCESS_TOKEN;
+    const isTestToken = token.startsWith("TEST-");
+    const isProdUrl   = (req.headers.origin || "").includes("vercel.app") || (req.headers.origin || "").includes("shekinah");
+    if (isTestToken && isProdUrl) {
+      console.warn("[create-preference] ⚠️  Usando token de PRUEBA en URL de producción. Los pagos reales no se procesarán.");
     }
 
     const db = getAdminDb();
@@ -112,9 +129,16 @@ export default async function handler(req, res) {
     const mpData = await mpRes.json();
 
     if (!mpRes.ok) {
-      console.error("[create-preference] Mercado Pago error:", mpData);
+      // Log completo para diagnóstico en Vercel Functions → Logs
+      console.error("[create-preference] Mercado Pago error HTTP", mpRes.status, JSON.stringify(mpData));
+      const mpMsg = mpData?.message || mpData?.error || JSON.stringify(mpData);
       await pedidoRef.update({ estado: "pago_rechazado" });
-      return res.status(502).json({ error: "No se pudo iniciar el pago con Mercado Pago." });
+      return res.status(502).json({
+        error: `Mercado Pago rechazó la solicitud (HTTP ${mpRes.status}): ${mpMsg}. ` +
+               `Revisa que MP_ACCESS_TOKEN sea válido y que la cuenta de MP esté activa.`,
+        mp_status: mpRes.status,
+        mp_detail: mpData,
+      });
     }
 
     return res.status(200).json({ orderId, initPoint: mpData.init_point });
