@@ -249,26 +249,52 @@ function useNewOrderAlert(pedidos, playNewOrderBeep) {
 
 // ── DiscountPanel ────────────────────────────────────────────────────
 function DiscountPanel({ subtotal, onChange, G }) {
+  const [open,    setOpen]    = useState(false);
   const [tipo,    setTipo]    = useState("%");
   const [valor,   setValor]   = useState("");
 
   useEffect(() => {
-    const v = parseFloat(valor) || 0;
+    const v = open ? (parseFloat(valor) || 0) : 0;
     let descuento = tipo === "%" ? subtotal * (v / 100) : v;
     descuento = Math.min(descuento, subtotal);
     const totalFinal = Math.max(0, subtotal - descuento);
     onChange({ descuentoAplicado: parseFloat(descuento.toFixed(2)), tipoDescuento: tipo, totalFinal });
-  }, [tipo, valor, subtotal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, tipo, valor, subtotal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const v = parseFloat(valor) || 0;
   const descuentoCalc = tipo === "%" ? subtotal * (v / 100) : v;
   const descuento = Math.min(descuentoCalc, subtotal);
   const totalFinal = Math.max(0, subtotal - descuento);
 
+  // Colapsado: solo un link discreto, no roba espacio del flujo principal de cobro.
+  if (!open) {
+    return (
+      <button
+        id="discount-toggle-open"
+        onClick={() => setOpen(true)}
+        style={{
+          width:"100%", padding:"7px 4px", marginBottom:10, borderRadius:8,
+          border:`1.5px dashed ${G.divider}`, background:"transparent",
+          color:G.textSub, fontSize:11.5, fontWeight:700, cursor:"pointer",
+          display:"flex", alignItems:"center", justifyContent:"center", gap:5,
+        }}>
+        🏷️ Aplicar descuento
+      </button>
+    );
+  }
+
   return (
     <div style={{background:"#fff8ee",borderRadius:10,padding:"12px 14px",
-      border:`1px solid ${G.divider}`,marginBottom:12}}>
-      <p style={{color:G.textSub,fontSize:11,fontWeight:800,margin:"0 0 8px",letterSpacing:1}}>DESCUENTO</p>
+      border:`1px solid ${G.divider}`,marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <p style={{color:G.textSub,fontSize:11,fontWeight:800,margin:0,letterSpacing:1}}>DESCUENTO</p>
+        <button
+          id="discount-toggle-close"
+          onClick={() => { setOpen(false); setValor(""); }}
+          style={{background:"none",border:"none",color:"#b0956a",fontSize:11,cursor:"pointer",fontWeight:700}}>
+          Quitar ✕
+        </button>
+      </div>
       <div style={{display:"flex",gap:6,marginBottom:8}}>
         {["%","$"].map(t=>(
           <button key={t} id={`discount-type-${t}`} onClick={()=>setTipo(t)} style={{
@@ -282,6 +308,7 @@ function DiscountPanel({ subtotal, onChange, G }) {
       <input
         id="discount-value"
         type="number" min="0" value={valor}
+        autoFocus
         onChange={e=>setValor(e.target.value)}
         placeholder={tipo==="%"?"Ej. 10":"Ej. 50"}
         style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",borderRadius:8,
@@ -870,50 +897,54 @@ function POS({ onPedidoCreado, G }) {
 
         {/* Footer: descuento, pago, cobrar */}
         <div style={{borderTop:`2px solid ${G.divider}`,background:"#f5f1e8"}}>
-          {cart.length > 0 && (
-            <div style={{padding:"12px 14px 0"}}>
-              <DiscountPanel subtotal={subtotal} onChange={setDiscount} G={G} />
-            </div>
-          )}
           <div style={{padding:"12px 14px"}}>
-            <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 7px",letterSpacing:1.5}}>MÉTODO DE PAGO</p>
-            <div style={{display:"flex",gap:5,marginBottom:14}}>
-              {["efectivo","transferencia","terminal"].map(p=>(
-                <button key={p} id={`pos-payment-${p}`} className="pay-btn" onClick={()=>setPayment(p)} style={{
-                  flex:1,padding:"7px 4px",borderRadius:8,cursor:"pointer",fontSize:10,fontWeight:800,
-                  border:`1.5px solid ${payment===p?G.gold:G.divider}`,
-                  background:payment===p?G.gold:"transparent",
-                  color:payment===p?G.dark:G.textSub,transition:"all .15s"}}>
-                  {p==="efectivo"?"Efectivo":p==="transferencia"?"Transferencia":"Terminal"}</button>
-              ))}
-            </div>
 
-            {/* Calculadora de cambio — solo en efectivo */}
-            {payment==="efectivo" && cart.length>0 && (
-              <div style={{background:"#fff",borderRadius:9,padding:"10px 12px",
-                border:`1px solid ${G.divider}`,marginBottom:12}}>
-                <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 7px",letterSpacing:1}}>
-                  EFECTIVO RECIBIDO ($)</p>
-                <input
-                  id="pos-efectivo-recibido"
-                  type="number" min="0"
-                  value={efectivoRecibido}
-                  onChange={e=>setEfectivoRecibido(e.target.value)}
-                  placeholder={`Mín. $${totalFinal.toFixed(2)}`}
-                  style={{width:"100%",boxSizing:"border-box",padding:"8px 10px",borderRadius:8,
-                    border:`1.5px solid ${G.gold}`,fontSize:16,fontWeight:900,
-                    color:G.dark,fontFamily:"Georgia,serif"}}
-                />
-                {parseFloat(efectivoRecibido)>=totalFinal && totalFinal>0 && (
-                  <div style={{marginTop:8,display:"flex",justifyContent:"space-between",
-                    background:"#eafaf1",borderRadius:8,padding:"7px 10px"}}>
-                    <span style={{color:"#27ae60",fontWeight:800,fontSize:13}}>Cambio a devolver</span>
-                    <span style={{color:"#27ae60",fontWeight:900,fontSize:17,fontFamily:"Georgia,serif"}}>
-                      ${(parseFloat(efectivoRecibido)-totalFinal).toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
+            {/* Descuento — colapsado por default, no compite con el flujo principal */}
+            {cart.length > 0 && (
+              <DiscountPanel subtotal={subtotal} onChange={setDiscount} G={G} />
             )}
+
+            {/* Tarjeta: Método de pago */}
+            <div style={{background:"#fff",borderRadius:10,padding:"12px 12px",
+              border:`1px solid ${G.divider}`,marginBottom:10}}>
+              <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 8px",letterSpacing:1.5}}>MÉTODO DE PAGO</p>
+              <div style={{display:"flex",gap:5}}>
+                {["efectivo","transferencia","terminal"].map(p=>(
+                  <button key={p} id={`pos-payment-${p}`} className="pay-btn" onClick={()=>setPayment(p)} style={{
+                    flex:1,padding:"7px 4px",borderRadius:8,cursor:"pointer",fontSize:10,fontWeight:800,
+                    border:`1.5px solid ${payment===p?G.gold:G.divider}`,
+                    background:payment===p?G.gold:"transparent",
+                    color:payment===p?G.dark:G.textSub,transition:"all .15s"}}>
+                    {p==="efectivo"?"Efectivo":p==="transferencia"?"Transferencia":"Terminal"}</button>
+                ))}
+              </div>
+
+              {/* Calculadora de cambio — solo en efectivo, dentro de la misma tarjeta */}
+              {payment==="efectivo" && cart.length>0 && (
+                <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${G.divider}`}}>
+                  <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 7px",letterSpacing:1}}>
+                    EFECTIVO RECIBIDO ($)</p>
+                  <input
+                    id="pos-efectivo-recibido"
+                    type="number" min="0"
+                    value={efectivoRecibido}
+                    onChange={e=>setEfectivoRecibido(e.target.value)}
+                    placeholder={`Mín. $${totalFinal.toFixed(2)}`}
+                    style={{width:"100%",boxSizing:"border-box",padding:"8px 10px",borderRadius:8,
+                      border:`1.5px solid ${G.gold}`,fontSize:16,fontWeight:900,
+                      color:G.dark,fontFamily:"Georgia,serif"}}
+                  />
+                  {parseFloat(efectivoRecibido)>=totalFinal && totalFinal>0 && (
+                    <div style={{marginTop:8,display:"flex",justifyContent:"space-between",
+                      background:"#eafaf1",borderRadius:8,padding:"7px 10px"}}>
+                      <span style={{color:"#27ae60",fontWeight:800,fontSize:13}}>Cambio a devolver</span>
+                      <span style={{color:"#27ae60",fontWeight:900,fontSize:17,fontFamily:"Georgia,serif"}}>
+                        ${(parseFloat(efectivoRecibido)-totalFinal).toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Total */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
@@ -952,18 +983,20 @@ function POS({ onPedidoCreado, G }) {
               transition:"all .2s",letterSpacing:.5}}>
               {sending?"⏳ Registrando...":"✓ Cobrar y enviar a cocina"}</button>
 
-            {/* ── Registrar pedido de WhatsApp ── */}
-            <button
-              id="btn-open-wa-modal"
-              onClick={()=>setShowWAModal(true)}
-              style={{
-                width:"100%",marginTop:8,padding:"10px",borderRadius:9,
-                border:"1.5px solid #25D366",background:"#f0fff5",
-                color:"#1a7a40",fontWeight:800,fontSize:13,cursor:"pointer",
-                display:"flex",alignItems:"center",justifyContent:"center",gap:6,
-              }}>
-              💬 Registrar pedido de WhatsApp
-            </button>
+            {/* ── Registrar pedido de WhatsApp — acción secundaria, separada del flujo de cobro ── */}
+            <div style={{textAlign:"center",marginTop:10}}>
+              <button
+                id="btn-open-wa-modal"
+                onClick={()=>setShowWAModal(true)}
+                style={{
+                  background:"none",border:"none",
+                  color:"#1a7a40",fontWeight:700,fontSize:12,cursor:"pointer",
+                  display:"inline-flex",alignItems:"center",gap:5,
+                  textDecoration:"underline",textDecorationColor:"#25D36688",
+                }}>
+                💬 Registrar pedido de WhatsApp
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -1066,7 +1066,9 @@ function App() {
     } catch(e) {
       console.error(e);
       if (esPagoOnline) {
-        alert("❌ El pago no pudo procesarse. Verifica los datos de tu tarjeta e intenta de nuevo, o elige otro método de pago.");
+        // Mostramos el motivo real (viene del backend en api/create-preference.js)
+        // en vez de un mensaje genérico, para poder diagnosticar configuración faltante.
+        alert(`❌ No se pudo iniciar el pago.\n\n${e.message || "Error desconocido."}`);
       } else {
         alert("No se pudo abrir WhatsApp. Por favor intenta de nuevo.");
       }
