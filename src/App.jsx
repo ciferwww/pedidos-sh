@@ -1013,24 +1013,39 @@ function App() {
 
   // ── Pago con tarjeta: crea preferencia de Mercado Pago vía /api ──
   const crearPreferenciaPago = async ({ name, phone, delivery, address, deliveryCost, total, turno }) => {
-    const res = await fetch("/api/create-preference", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tenantId, name, phone, delivery, address, deliveryCost, total, turno,
-        cart: cart.map(i => ({
-          name: i.name, qty: i.qty, totalPrice: i.totalPrice,
-          protein: i.protein || "", sauce: i.sauce || "", bomba: i.bomba || false,
-          extras: i.extras || [], platExtras: i.platExtras || [],
-          note: i.note || "", alga: i.alga ?? null, preparacion: i.preparacion || "",
-        })),
-      }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "No se pudo iniciar el pago");
+    let res;
+    try {
+      res = await fetch("/api/create-preference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId, name, phone, delivery, address, deliveryCost, total, turno,
+          cart: cart.map(i => ({
+            name: i.name, qty: i.qty, totalPrice: i.totalPrice,
+            protein: i.protein || "", sauce: i.sauce || "", bomba: i.bomba || false,
+            extras: i.extras || [], platExtras: i.platExtras || [],
+            note: i.note || "", alga: i.alga ?? null, preparacion: i.preparacion || "",
+          })),
+        }),
+      });
+    } catch (networkErr) {
+      // fetch ni siquiera completó: sin conexión, CORS, o el endpoint no existe en absoluto
+      throw new Error(`No se pudo contactar al servidor (${networkErr.message}). Revisa que /api/create-preference exista en el deploy.`);
     }
-    return res.json(); // { orderId, initPoint }
+
+    // Leemos el body como texto SIEMPRE primero, así nunca perdemos info aunque no sea JSON
+    const rawText = await res.text();
+    let data = {};
+    try { data = rawText ? JSON.parse(rawText) : {}; } catch (_) { /* no era JSON */ }
+
+    if (!res.ok) {
+      const detalle = data.error || (rawText ? rawText.slice(0, 300) : "(sin contenido)");
+      throw new Error(`HTTP ${res.status} — ${detalle}`);
+    }
+    if (!data.initPoint) {
+      throw new Error(`El servidor respondió OK pero sin initPoint. Respuesta cruda: ${rawText.slice(0, 300)}`);
+    }
+    return data; // { orderId, initPoint }
   };
 
   // ── Lógica estricta de pagos ─────────────────────────────────────
