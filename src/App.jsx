@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import {  addDoc, serverTimestamp, getDoc, onSnapshot, doc, collection} from "firebase/firestore";
+import { getDoc, onSnapshot, doc } from "firebase/firestore";
 import { useTenant, useTenantConfig, useIsClosedHours, TenantProvider } from "./TenantContext";
 import { genericDescFor } from "./GestorMenu";
 
@@ -450,6 +450,38 @@ function OrderTracker({ orderId, onClose }) {
   }
 
   if(!pedido) return <div style={{padding:40,textAlign:"center",color:G.textSub}}>Cargando estado...</div>;
+
+  if (pedido.estado === "pendiente_pago") {
+    return (
+      <div style={{background:G.offWhite,minHeight:"100vh",padding:20,maxWidth:640,margin:"0 auto",fontFamily:"'Segoe UI',sans-serif"}}>
+        <div style={{background:G.cardBg,borderRadius:16,padding:32,border:`1px solid ${G.divider}`,textAlign:"center"}}>
+          <p style={{color:G.gold,fontWeight:900,fontSize:18,margin:"0 0 8px"}}>Confirmando tu pago…</p>
+          <p style={{color:G.textSub,fontSize:13,margin:0}}>
+            Esto puede tardar unos segundos. Esta página se actualiza sola en cuanto el banco confirme.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (pedido.estado === "pago_rechazado") {
+    return (
+      <div style={{background:G.offWhite,minHeight:"100vh",padding:20,maxWidth:640,margin:"0 auto",fontFamily:"'Segoe UI',sans-serif"}}>
+        <div style={{background:"#fdecea",border:"1.5px solid #e74c3c",borderRadius:16,padding:32,textAlign:"center"}}>
+          <p style={{color:"#c0392b",fontWeight:900,fontSize:18,margin:"0 0 8px"}}>Tu pago no se completó</p>
+          <p style={{color:"#7a3a3a",fontSize:13,margin:"0 0 18px"}}>
+            No te preocupes, no se hizo ningún cargo. Puedes volver al menú e intentar de nuevo.
+          </p>
+          {onClose && (
+            <button onClick={onClose} style={{padding:"12px 24px",borderRadius:12,border:"none",
+              background:G.gold,color:G.dark,fontWeight:900,fontSize:15,cursor:"pointer"}}>
+              Volver al menú
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const est = pedido.estado;
   const stages = [
@@ -979,11 +1011,27 @@ function App() {
     return encodeURIComponent(msg);
   };
 
-  // ── Simula pasarela de pago online (tarjeta) ─────────────────────
-  const simulatePagoOnline = () =>
-    new Promise((resolve, reject) =>
-      setTimeout(() => (Math.random() > 0.05 ? resolve() : reject(new Error("Pago declinado"))), 2000)
-    );
+  // ── Pago con tarjeta: crea preferencia de Mercado Pago vía /api ──
+  const crearPreferenciaPago = async ({ name, phone, delivery, address, deliveryCost, total, turno }) => {
+    const res = await fetch("/api/create-preference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenantId, name, phone, delivery, address, deliveryCost, total, turno,
+        cart: cart.map(i => ({
+          name: i.name, qty: i.qty, totalPrice: i.totalPrice,
+          protein: i.protein || "", sauce: i.sauce || "", bomba: i.bomba || false,
+          extras: i.extras || [], platExtras: i.platExtras || [],
+          note: i.note || "", alga: i.alga ?? null, preparacion: i.preparacion || "",
+        })),
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "No se pudo iniciar el pago");
+    }
+    return res.json(); // { orderId, initPoint }
+  };
 
   // ── Lógica estricta de pagos ─────────────────────────────────────
   // tarjeta (domicilio o local) → pasarela → Firestore → cocina
@@ -997,32 +1045,14 @@ function App() {
 
     try {
       if (esPagoOnline) {
-        // ── Opción A: Pago con tarjeta → simular pasarela → guardar en Firestore ──
-        await simulatePagoOnline();
-
-        const orderId = (await addDoc(colRef("pedidos"), {
-          nombre: name, telefono: phone, entrega: delivery,
-          direccion: address || "", pago: "tarjeta",
-          metodoPago: "tarjeta", pagado: true,
-          costoEnvio: delivery === "domicilio" ? deliveryCost : 0,
-          articulos: cart.map(i => ({
-            nombre: i.name, cantidad: i.qty, protein: i.protein || "",
-            salsa: i.sauce || "", bomba: i.bomba || false,
-            extras: i.extras || [], platExtras: i.platExtras || [],
-            nota: i.note || "", subtotal: i.totalPrice,
-            alga: i.alga ?? null,
-            preparacion: i.preparacion || ""
-          })),
-          total, estado: "nuevo", origen: "web",
-          creadoEn: serverTimestamp(), turno, tenantId,
-        })).id;
-
+        // ── Opción A: Pago con tarjeta → Mercado Pago Checkout Pro ──
+        // El pedido se crea en Firestore desde el servidor (estado "pendiente_pago")
+        // y se confirma vía webhook cuando Mercado Pago aprueba el pago.
+        const { orderId, initPoint } = await crearPreferenciaPago({ name, phone, delivery, address, deliveryCost, total, turno });
         localStorage.setItem("trackingOrderId", orderId);
-        setTrackingOrderId(orderId);
-        setCart([]);
-        setShowModal(false);
-        playOrderConfirmed();
-        setConfirmedTurno(turno);
+        localStorage.setItem("cartBackup", JSON.stringify(cart));
+        window.location.href = initPoint; // sale del menú hacia la pasarela
+        return;
       } else {
         // ── Opción B: Efectivo / Transferencia / Terminal → SOLO WhatsApp ──
         // NO se guarda nada en Firestore. El cajero registra el pedido manualmente.
@@ -1083,7 +1113,15 @@ function App() {
       `}</style>
 
       {/* SI HAY PEDIDO ACTIVO MUESTRA EL RASTREADOR */}
-      {trackingOrderId && <OrderTracker orderId={trackingOrderId} onClose={() => { setTrackingOrderId(null); localStorage.removeItem("trackingOrderId"); }} />}
+      {trackingOrderId && <OrderTracker orderId={trackingOrderId} onClose={() => {
+        setTrackingOrderId(null);
+        localStorage.removeItem("trackingOrderId");
+        const backup = localStorage.getItem("cartBackup");
+        if (backup) {
+          try { setCart(JSON.parse(backup)); } catch (_) {}
+          localStorage.removeItem("cartBackup");
+        }
+      }} />}
       
       {/* SI NO HAY PEDIDO, MUESTRA EL MENÚ */}
       {!trackingOrderId && <>

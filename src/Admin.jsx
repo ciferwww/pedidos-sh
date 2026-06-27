@@ -8,6 +8,7 @@ import AdminLogin from "./AdminLogin";
 import KDS from "./KDS";
 import GestorMenu from "./GestorMenu";
 import DashboardGerencial from "./DashboardGerencial";
+import NominaPanel from "./NominaPanel";
 
 // ─── Re-exportamos Admin envuelto en TenantProvider ──────────────────
 export default function AdminRoot() {
@@ -332,6 +333,10 @@ function POS({ onPedidoCreado, G }) {
   const [editingPrice, setEditingPrice] = useState(null); // idx of cart item being price-edited
   const [editPriceVal, setEditPriceVal] = useState("");
   const [showWAModal, setShowWAModal] = useState(false);
+  const [tempBomba, setTempBomba]   = useState(false);
+  const [tempExtras, setTempExtras] = useState(0);   // cantidad de proteína extra (platillos con hasExtras)
+  const [efectivoRecibido, setEfectivoRecibido] = useState(""); // para calculadora de cambio
+  const [ultimaVenta, setUltimaVenta] = useState(null); // banner post-cobro: { turno, total, cambio }
 
   // Carga el catálogo en vivo desde Firestore (mismos productos que el cliente ve)
   useEffect(() => {
@@ -376,7 +381,7 @@ function POS({ onPedidoCreado, G }) {
 
   const addItem=(item)=>{
     const isSushi = item.isSushi;
-    const needsModal = item.protein || item.burgerProtein || item.sauce || isSushi;
+    const needsModal = item.protein || item.burgerProtein || item.sauce || isSushi || item.hasExtras;
     if(needsModal){
       setShowQuick({ ...item, isSushi });
       setTempProtein(null);
@@ -384,6 +389,8 @@ function POS({ onPedidoCreado, G }) {
       setTempAlga(true);
       setTempPrep(null);
       setTempNota("");
+      setTempBomba(false);
+      setTempExtras(0);
     } else {
       playAddToCart();
       setCart(prev=>{
@@ -401,15 +408,25 @@ function POS({ onPedidoCreado, G }) {
     if(item.sauce&&!tempSauce){ alert("Elige salsa"); return; }
     if(item.isSushi&&!tempPrep){ alert("Elige preparación (Natural/Empanizado/Mitad y Mitad)"); return; }
     playAddToCart();
+    const BOMBA_EXTRA = 165;
+    const PROTEIN_EXTRA_PRECIO = 30;
+    const precioBase = item.price;
+    const precioFinal = precioBase
+      + (tempBomba ? BOMBA_EXTRA : 0)
+      + (tempExtras * PROTEIN_EXTRA_PRECIO);
     setCart(prev=>[...prev,{
-      id:item.id+"-"+Date.now(), nombre:item.name, precio:item.price,
-      cantidad:1, subtotal:item.price,
+      id:item.id+"-"+Date.now(), nombre:item.name, precio:precioFinal,
+      cantidad:1, subtotal:precioFinal,
       protein:tempProtein||"", salsa:tempSauce||"",
       alga: showQuick.isSushi ? tempAlga : null,
       preparacion: showQuick.isSushi ? tempPrep : "",
       nota: tempNota||"",
+      bomba: tempBomba,
+      extras: tempExtras > 0 ? [`Proteína extra ×${tempExtras}`] : [],
     }]);
     setShowQuick(null);
+    setTempBomba(false);
+    setTempExtras(0);
   };
 
   const removeItem=(idx)=>setCart(prev=>prev.filter((_,i)=>i!==idx));
@@ -440,6 +457,9 @@ function POS({ onPedidoCreado, G }) {
     const descuentoAplicado = discount.descuentoAplicado || 0;
     const tipoDescuento = discount.tipoDescuento;
     const total = parseFloat(totalFinal.toFixed(2));
+    const recibido = parseFloat(efectivoRecibido) || 0;
+    const cambio = payment === "efectivo" && recibido >= total
+      ? parseFloat((recibido - total).toFixed(2)) : 0;
     try{
       await addDoc(colRef("pedidos"),{
         nombre: mesa?"Mesa "+mesa:"Mostrador",
@@ -447,16 +467,19 @@ function POS({ onPedidoCreado, G }) {
         pago:payment, costoEnvio:0,
         mesa:mesa||"",
         articulos:cart.map(i=>({
-          nombre:i.nombre,cantidad:i.cantidad,protein:i.protein||"",
-          salsa:i.salsa||"",bomba:false,extras:[],platExtras:[],nota:i.nota||"",subtotal:i.subtotal,
+          nombre:i.nombre, cantidad:i.cantidad, protein:i.protein||"",
+          salsa:i.salsa||"", bomba:i.bomba||false, extras:i.extras||[], platExtras:[],
+          nota:i.nota||"", subtotal:i.subtotal,
           alga: i.alga ?? null,
           preparacion: i.preparacion || ""
         })),
         subtotal, descuentoAplicado, tipoDescuento,
         totalFinal: total, total,
-        estado:"en_proceso", origen:"pos", creadoEn:serverTimestamp(), turno,
+        estado:"nuevo", origen:"pos", creadoEn:serverTimestamp(), turno,
       });
+      setUltimaVenta({ turno, total, cambio, mesa });
       setCart([]); setMesa(""); setDiscount({descuentoAplicado:0,tipoDescuento:"%",totalFinal:0});
+      setEfectivoRecibido("");
       onPedidoCreado&&onPedidoCreado();
     }catch(e){console.error(e);}
     setSending(false);
@@ -553,6 +576,46 @@ function POS({ onPedidoCreado, G }) {
                       background:tempSauce===s?G.gold:"#2a1f0d",
                       color:tempSauce===s?G.dark:"#c9b07a",transition:"all .15s"}}>{s}</button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Bomba (solo sushi) */}
+            {showQuick.isSushi && (
+              <div style={{marginBottom:16}}>
+                <p style={{color:"#9a7a3a",fontSize:10,fontWeight:800,margin:"0 0 8px",letterSpacing:1.5}}>
+                  BOMBA <span style={{color:"#c0392b",fontWeight:900}}>+$165</span>
+                </p>
+                <button id="quick-bomba" onClick={()=>setTempBomba(p=>!p)} style={{
+                  padding:"6px 18px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:800,
+                  border:`1.5px solid ${tempBomba?"#c0392b":"#3a2e1a"}`,
+                  background:tempBomba?"#c0392b":"#2a1f0d",
+                  color:tempBomba?"#fff":"#c9b07a",transition:"all .15s"}}>
+                  {tempBomba?"🔥 BOMBA activada":"Sin bomba"}
+                </button>
+              </div>
+            )}
+
+            {/* Proteína extra (platillos con hasExtras) */}
+            {showQuick.hasExtras && !showQuick.isSushi && (
+              <div style={{marginBottom:16}}>
+                <p style={{color:"#9a7a3a",fontSize:10,fontWeight:800,margin:"0 0 8px",letterSpacing:1.5}}>
+                  PROTEÍNA EXTRA <span style={{color:"#c9a84c",fontWeight:700}}>$30 c/u</span>
+                </p>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <button onClick={()=>setTempExtras(p=>Math.max(0,p-1))} style={{
+                    width:30,height:30,borderRadius:"50%",border:"1.5px solid #3a2e1a",
+                    background:"#2a1f0d",color:"#c9b07a",fontSize:18,cursor:"pointer",display:"flex",
+                    alignItems:"center",justifyContent:"center",fontWeight:900}}>−</button>
+                  <span style={{color:G.goldLight,fontWeight:900,fontSize:18,minWidth:24,textAlign:"center"}}>
+                    {tempExtras}</span>
+                  <button onClick={()=>setTempExtras(p=>p+1)} style={{
+                    width:30,height:30,borderRadius:"50%",border:"1.5px solid #3a2e1a",
+                    background:"#2a1f0d",color:"#c9b07a",fontSize:18,cursor:"pointer",display:"flex",
+                    alignItems:"center",justifyContent:"center",fontWeight:900}}>+</button>
+                  {tempExtras > 0 && (
+                    <span style={{color:"#c9a84c",fontSize:12,fontWeight:700}}>= +${tempExtras*30}</span>
+                  )}
                 </div>
               </div>
             )}
@@ -740,6 +803,34 @@ function POS({ onPedidoCreado, G }) {
                   {p==="efectivo"?"Efectivo":p==="transferencia"?"Transferencia":"Terminal"}</button>
               ))}
             </div>
+
+            {/* Calculadora de cambio — solo en efectivo */}
+            {payment==="efectivo" && cart.length>0 && (
+              <div style={{background:"#fff",borderRadius:9,padding:"10px 12px",
+                border:`1px solid ${G.divider}`,marginBottom:12}}>
+                <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 7px",letterSpacing:1}}>
+                  EFECTIVO RECIBIDO ($)</p>
+                <input
+                  id="pos-efectivo-recibido"
+                  type="number" min="0"
+                  value={efectivoRecibido}
+                  onChange={e=>setEfectivoRecibido(e.target.value)}
+                  placeholder={`Mín. $${totalFinal.toFixed(2)}`}
+                  style={{width:"100%",boxSizing:"border-box",padding:"8px 10px",borderRadius:8,
+                    border:`1.5px solid ${G.gold}`,fontSize:16,fontWeight:900,
+                    color:G.dark,fontFamily:"Georgia,serif"}}
+                />
+                {parseFloat(efectivoRecibido)>=totalFinal && totalFinal>0 && (
+                  <div style={{marginTop:8,display:"flex",justifyContent:"space-between",
+                    background:"#eafaf1",borderRadius:8,padding:"7px 10px"}}>
+                    <span style={{color:"#27ae60",fontWeight:800,fontSize:13}}>Cambio a devolver</span>
+                    <span style={{color:"#27ae60",fontWeight:900,fontSize:17,fontFamily:"Georgia,serif"}}>
+                      ${(parseFloat(efectivoRecibido)-totalFinal).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Total */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
               padding:"10px 12px",borderRadius:10,background:"#1a1108",marginBottom:12}}>
@@ -747,6 +838,27 @@ function POS({ onPedidoCreado, G }) {
               <p style={{color:G.gold,fontWeight:900,fontSize:22,margin:0,fontFamily:"Georgia,serif"}}>
                 ${totalFinal.toFixed(2)}</p>
             </div>
+
+            {/* Banner de última venta */}
+            {ultimaVenta && (
+              <div style={{background:"#eafaf1",borderRadius:10,padding:"12px 14px",marginBottom:10,
+                border:"1.5px solid #27ae60",position:"relative"}}>
+                <button onClick={()=>setUltimaVenta(null)} style={{position:"absolute",top:6,right:8,
+                  background:"none",border:"none",color:"#27ae60",fontSize:16,cursor:"pointer"}}>✕</button>
+                <p style={{color:"#27ae60",fontWeight:900,fontSize:13,margin:"0 0 4px"}}>
+                  ✓ Pedido registrado · Turno #{ultimaVenta.turno}</p>
+                <p style={{color:"#1a7a40",fontSize:12,margin:"0 0 2px"}}>
+                  Total cobrado: <strong>${ultimaVenta.total.toFixed(2)}</strong>
+                  {ultimaVenta.mesa ? `  · Mesa ${ultimaVenta.mesa}` : ""}
+                </p>
+                {ultimaVenta.cambio > 0 && (
+                  <p style={{color:"#1a7a40",fontWeight:900,fontSize:14,margin:0}}>
+                    Cambio a entregar: <span style={{fontFamily:"Georgia,serif"}}>${ultimaVenta.cambio.toFixed(2)}</span>
+                  </p>
+                )}
+              </div>
+            )}
+
             <button id="btn-cobrar" className="cobrar-btn" onClick={cobrar} disabled={sending||cart.length===0} style={{
               width:"100%",padding:"13px",borderRadius:10,border:"none",
               background:cart.length===0?"#d4cfc6":`linear-gradient(135deg,${G.gold},${G.goldLight})`,
@@ -1401,6 +1513,7 @@ function Dashboard({ empleado, onLogout }) {
     {key:"menu",    label:"Menú",               roles:["jefe"]},
     {key:"config",  label:"Config",              roles:["jefe"]},
     {key:"dash",    label:"Dashboard Gerencial", roles:["jefe"]},
+    {key:"nomina",  label:"Nómina",              roles:["jefe"]},
   ];
   const TABS = TODAS_LAS_TABS.filter(t => t.roles.includes(empleado.rol));
 
@@ -1490,6 +1603,7 @@ function Dashboard({ empleado, onLogout }) {
       {tab==="menu"&&<GestorMenu />}
       {tab==="config"&&<Config G={G} />}
       {tab==="dash"&&<DashboardGerencial />}
+      {tab==="nomina"&&<NominaPanel />}
       {tab==="pedidos"&&(
         <div style={{padding:"14px 16px"}}>
           <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:4}}>

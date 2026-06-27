@@ -352,8 +352,8 @@ function NewTenantModal({ onClose, onCreated }) {
               margin:"0 0 5px" }}>ESTADO INICIAL</p>
             <select value={form.status} onChange={e => set("status", e.target.value)}
               style={{ ...inputStyle }}>
-              <option value="prueba">⏳ Prueba</option>
-              <option value="activo">✅ Activo</option>
+              <option value="prueba"> Prueba</option>
+              <option value="activo"> Activo</option>
             </select>
           </div>
         </div>
@@ -439,7 +439,7 @@ function TenantRow({ tenant, onSuspend, onActivate, onEdit }) {
           </p>
           {days !== null && (
             <p style={{ color:S.textSub, fontSize:10, margin:"2px 0 0" }}>
-              {days <= 0 ? "⚠️ Venció" : `Faltan ${days}d`}
+              {days <= 0 ? " Venció" : `Faltan ${days}d`}
             </p>
           )}
         </td>
@@ -459,13 +459,13 @@ function TenantRow({ tenant, onSuspend, onActivate, onEdit }) {
           <div style={{ display:"flex", gap:6 }}>
             {!isActivo && (
               <button onClick={() => onActivate(tenant.id)}
-                style={actionBtn(S.green, S.greenBg)}>✅ Activar</button>
+                style={actionBtn(S.green, S.greenBg)}> Activar</button>
             )}
             {!isSusp && (
               <button onClick={() => {
                 if(window.confirm(`¿Suspender "${tenant.nombre}"? El menú quedará bloqueado.`))
                   onSuspend(tenant.id);
-              }} style={actionBtn(S.red, S.redBg)}>🚫 Suspender</button>
+              }} style={actionBtn(S.red, S.redBg)}> Suspender</button>
             )}
           </div>
         </td>
@@ -579,9 +579,9 @@ function TenantsTable({ tenants, onSuspend, onActivate }) {
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
           style={filterSelect}>
           <option value="todos">Todos los estados</option>
-          <option value="activo">✅ Activos</option>
-          <option value="suspendido">🚫 Suspendidos</option>
-          <option value="prueba">⏳ En prueba</option>
+          <option value="activo"> Activos</option>
+          <option value="suspendido"> Suspendidos</option>
+          <option value="prueba"> En prueba</option>
         </select>
       </div>
 
@@ -639,7 +639,7 @@ function AlertsStrip({ tenants }) {
     <div style={{ background:S.yellowBg, border:`1px solid ${S.yellowBdr}`,
       borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
       <p style={{ color:S.yellow, fontWeight:800, fontSize:13, margin:"0 0 6px" }}>
-        ⚠️ Cortes próximos ({alerts.length})
+         Cortes próximos ({alerts.length})
       </p>
       {alerts.map(t => {
         const d = daysLeft(t.fechaCorte);
@@ -717,7 +717,7 @@ function SADashboard({ onLogout }) {
           <div style={{ background:S.greenBg, border:`1px solid ${S.greenBdr}`,
             borderRadius:10, padding:"12px 16px", marginBottom:16,
             display:"flex", alignItems:"center", gap:12 }}>
-            <span style={{ fontSize:20 }}>🎉</span>
+            <span style={{ fontSize:20 }}></span>
             <div style={{ flex:1 }}>
               <p style={{ color:S.green, fontWeight:800, fontSize:13, margin:0 }}>
                 Restaurante creado exitosamente
