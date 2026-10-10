@@ -340,9 +340,23 @@ function DiscountPanel({ subtotal, onChange, G }) {
 // El catálogo se lee en vivo de /tenants/{tenantId}/productos (la misma
 // colección que administra GestorMenu y que consume el menú del cliente
 // en App.jsx). Cualquier cambio ahí se refleja aquí al instante.
+// Detecta celular y se actualiza si giras la pantalla o cambias el tamaño de la ventana
+function useIsMobile(breakpoint = 768) {
+  const [m, setM] = useState(() => typeof window !== "undefined" && window.innerWidth < breakpoint);
+  useEffect(() => {
+    const on = () => setM(window.innerWidth < breakpoint);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, [breakpoint]);
+  return m;
+}
+
 function POS({ onPedidoCreado, G }) {
   const { colRef, tenantId, playAddToCart } = useTenant();
-  const isMobile = window.innerWidth < 768;
+  const isMobile = useIsMobile();
+  const rootRef = useRef(null);
+  const [posH, setPosH] = useState(null);      // alto real disponible en escritorio/tablet
+  const [cartInView, setCartInView] = useState(false);
   const [menu, setMenu] = useState({});
   const [paquetes, setPaquetes] = useState([]); // paquetes (colección "paquetes")
   const [menuLoading, setMenuLoading] = useState(true);
@@ -366,6 +380,31 @@ function POS({ onPedidoCreado, G }) {
   const [tempExtras, setTempExtras] = useState(0);   // cantidad de proteína extra (platillos con hasExtras)
   const [efectivoRecibido, setEfectivoRecibido] = useState(""); // para calculadora de cambio
   const [ultimaVenta, setUltimaVenta] = useState(null); // banner post-cobro: { turno, total, cambio }
+
+  // El POS ocupa exactamente lo que queda de pantalla debajo del header del dashboard
+  useEffect(() => {
+    if (isMobile) { setPosH(null); return; }
+    const measure = () => {
+      const el = rootRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setPosH(Math.max(440, window.innerHeight - top));
+    };
+    measure();
+    const t = setTimeout(measure, 250);
+    window.addEventListener("resize", measure);
+    return () => { clearTimeout(t); window.removeEventListener("resize", measure); };
+  }, [isMobile]);
+
+  // En celular: saber si el carrito ya se ve para esconder la barra flotante
+  useEffect(() => {
+    if (!isMobile) return;
+    const el = document.getElementById("pos-cart-panel");
+    if (!el || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(([e]) => setCartInView(e.isIntersecting), { threshold: 0.15 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [isMobile]);
 
   // Carga el catálogo en vivo desde Firestore (mismos productos que el cliente ve)
   useEffect(() => {
@@ -426,6 +465,7 @@ function POS({ onPedidoCreado, G }) {
 
   const subtotal=cart.reduce((s,i)=>s+i.subtotal,0);
   const totalFinal = discount.descuentoAplicado > 0 ? discount.totalFinal : subtotal;
+  const itemCount = cart.reduce((s,i)=>s+i.cantidad,0);
 
   const addItem=(item)=>{
     const isSushi = item.isSushi;
@@ -536,23 +576,33 @@ function POS({ onPedidoCreado, G }) {
   };
 
   return (
-    <div style={{display:"flex", flexDirection: isMobile?"column":"row", gap:0, height: isMobile?"auto":"calc(100vh - 60px)", fontFamily:"'Segoe UI',sans-serif"}}>
+    <div ref={rootRef} style={{display:"flex", flexDirection: isMobile?"column":"row", gap:0, height: isMobile?"auto":(posH ? posH : "calc(100vh - 104px)"), fontFamily:"'Segoe UI',sans-serif"}}>
       <style>{`
-        .pos-item-btn:hover { transform:translateY(-2px); box-shadow:0 6px 20px #0002 !important; }
+        @media (hover:hover) {
+          .pos-item-btn:hover { transform:translateY(-2px); box-shadow:0 6px 20px #0002 !important; border-color:${G.gold}66 !important; }
+          .pos-item-btn:hover .pos-item-img { transform:scale(1.08); }
+          .cat-tab:hover { border-color:${G.gold} !important; }
+        }
         .pos-item-btn:active { transform:scale(.97); }
-        .pos-item-btn:hover .pos-item-img { transform:scale(1.1); }
         .cart-row:hover { background:#f7f3ec !important; }
         .pay-btn:hover { opacity:.9; }
         .cobrar-btn:hover:not(:disabled) { filter:brightness(1.08); transform:translateY(-1px); }
-        .cat-tab:hover { color:${G.gold} !important; }
+        .qty-btn:active { transform:scale(.9); }
         .price-edit-input:focus { outline:none; border-color:${G.gold} !important; }
+        .pos-item-btn:focus-visible, .cat-tab:focus-visible, .cobrar-btn:focus-visible, .qty-btn:focus-visible, .pay-btn:focus-visible { outline:2px solid ${G.gold}; outline-offset:2px; }
+        .pos-scroll::-webkit-scrollbar { width:8px; height:8px; }
+        .pos-scroll::-webkit-scrollbar-thumb { background:${G.gold}44; border-radius:8px; }
+        .pos-scroll::-webkit-scrollbar-track { background:transparent; }
+        @media (prefers-reduced-motion: reduce) {
+          .pos-item-btn, .pos-item-img, .cobrar-btn, .qty-btn { transition:none !important; }
+        }
       `}</style>
 
       {/* ─── Quick options modal ─── */}
       {showQuick&&(
         <div style={{position:"fixed",inset:0,background:"rgba(10,6,2,.75)",zIndex:500,
           display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
-          <div style={{background:"#1a1108",borderRadius:18,padding:28,width:340,maxWidth:"92vw",
+          <div style={{background:"#1a1108",borderRadius:18,padding:28,width:340,maxWidth:"92vw",maxHeight:"90vh",overflowY:"auto",
             border:`1.5px solid ${G.gold}44`,boxShadow:`0 24px 60px #0008,0 0 0 1px ${G.gold}22`}}>
             {/* Header */}
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:18}}>
@@ -697,17 +747,18 @@ function POS({ onPedidoCreado, G }) {
       )}
 
       {/* ─── LEFT — Menú ─── */}
-      <div style={{flex:1,overflowY:"auto",background:"#16110a",display:"flex",flexDirection:"column"}}>
-        {/* Categorías */}
-        <div style={{display:"flex",overflowX:"auto",background:"#0e0b06",
-          borderBottom:`1px solid ${G.gold}33`,scrollbarWidth:"none",padding:"0 8px",flexShrink:0}}>
+      <div className="pos-scroll" style={{flex:1,minWidth:0,overflowY:"auto",background:"#16110a",display:"flex",flexDirection:"column"}}>
+        {/* Categorías — chips con área de toque cómoda */}
+        <div className="pos-scroll" style={{display:"flex",gap:8,overflowX:"auto",background:"#0e0b06",
+          borderBottom:`1px solid ${G.gold}33`,scrollbarWidth:"none",padding:"10px 12px",flexShrink:0,
+          position:isMobile?"static":"sticky",top:0,zIndex:5}}>
           {allCategories.map(c=>(
             <button key={c} id={`pos-tab-${c}`} className="cat-tab" onClick={()=>setCat(c)} style={{
-              padding:"12px 16px",border:"none",
-              borderBottom:`3px solid ${cat===c?G.gold:"transparent"}`,
-              background:"transparent",color:cat===c?G.gold:"#5a4a2a",
-              fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",
-              transition:"color .2s",letterSpacing:.5}}>
+              padding:"9px 16px",minHeight:40,borderRadius:999,
+              border:`1.5px solid ${cat===c?G.gold:"#2a2010"}`,
+              background:cat===c?G.gold:"#1a1309",color:cat===c?G.dark:"#a88c55",
+              fontWeight:800,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",
+              transition:"all .18s",letterSpacing:.3}}>
               {c}</button>
           ))}
         </div>
@@ -725,15 +776,16 @@ function POS({ onPedidoCreado, G }) {
 
         {/* Vista especial: Paquetes */}
         {!menuLoading && cat === "📦 Paquetes" && (
-          <div style={{padding:12,display:"grid",
-            gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,overflowY:"auto"}}>
+          <div style={{padding:14,display:"grid",
+            gridTemplateColumns:`repeat(auto-fill,minmax(${isMobile?150:210}px,1fr))`,gap:12}}>
             {paquetes.map(pkg=>(
               <button key={pkg.id} id={`pos-pkg-${pkg.id}`} className="pos-item-btn"
                 onClick={()=>setShowPaqueteModal(pkg)}
                 style={{
                   background:"linear-gradient(145deg,#1a1508,#141009)",
-                  border:`1.5px solid ${G.gold}44`,borderRadius:12,
+                  border:`1.5px solid ${G.gold}44`,borderRadius:14,
                   padding:14,cursor:"pointer",textAlign:"left",
+                  display:"flex",flexDirection:"column",
                   transition:"all .18s",boxShadow:"0 2px 8px #00000040"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                   <span style={{fontSize:18}}>📦</span>
@@ -762,7 +814,7 @@ function POS({ onPedidoCreado, G }) {
                     )}
                   </div>
                 )}
-                <p style={{color:G.gold,fontWeight:900,fontSize:18,margin:0,
+                <p style={{color:G.gold,fontWeight:900,fontSize:19,margin:"auto 0 0",paddingTop:6,
                   fontFamily:"Georgia,serif"}}>${pkg.precio}</p>
               </button>
             ))}
@@ -776,22 +828,23 @@ function POS({ onPedidoCreado, G }) {
 
         {/* Vista normal: productos regulares */}
         {!menuLoading && cat && cat !== "📦 Paquetes" && (
-          <div style={{padding:12,display:"grid",
-            gridTemplateColumns:"repeat(auto-fill,minmax(168px,1fr))",gap:10,overflowY:"auto"}}>
+          <div style={{padding:14,display:"grid",
+            gridTemplateColumns:`repeat(auto-fill,minmax(${isMobile?140:172}px,1fr))`,gap:12}}>
             {(menu[cat]||[]).map(item=>(
               <button key={item.id} id={`pos-item-${item.id}`} className="pos-item-btn" onClick={()=>addItem(item)} style={{
                 background:"linear-gradient(145deg,#1f1710,#1a120a)",
-                border:`1px solid ${G.gold}25`,borderRadius:12,
-                padding:item.imagen?0:"14px 10px",cursor:"pointer",textAlign:"left",
+                border:`1px solid ${G.gold}25`,borderRadius:14,
+                padding:item.imagen?0:"14px 12px",cursor:"pointer",textAlign:"left",
+                display:"flex",flexDirection:"column",minHeight:96,
                 transition:"all .18s",boxShadow:"0 2px 8px #00000040",overflow:"hidden"}}>
                 {item.imagen && (
-                  <div style={{width:"100%",height:80,overflow:"hidden"}}>
+                  <div style={{width:"100%",height:isMobile?88:100,overflow:"hidden",flexShrink:0}}>
                     <img src={item.imagen} alt={item.name} className="pos-item-img" style={{
                       width:"100%",height:"100%",objectFit:"cover",display:"block",
                       transition:"transform .3s ease"}} />
                   </div>
                 )}
-                <div style={{padding:item.imagen?"10px 10px 12px":0}}>
+                <div style={{padding:item.imagen?"10px 12px 12px":0,display:"flex",flexDirection:"column",flex:1,width:"100%",boxSizing:"border-box"}}>
                   <p style={{color:G.goldLight,fontWeight:800,fontSize:13,margin:"0 0 4px",
                     fontFamily:"Georgia,serif",lineHeight:1.25}}>{item.name}</p>
                   {item.desc && (
@@ -799,9 +852,13 @@ function POS({ onPedidoCreado, G }) {
                       overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
                       {item.desc}</p>
                   )}
-                  <p style={{color:G.gold,fontWeight:900,fontSize:16,margin:"0 0 4px",fontFamily:"Georgia,serif"}}>${item.price}</p>
-                  {item.fixedIngredients&&<span style={{fontSize:9,color:"#6b5030",letterSpacing:.5}}>INGREDIENTES FIJOS</span>}
-                  {item.protein&&!item.fixedIngredients&&<span style={{fontSize:9,color:"#6b5030",letterSpacing:.5}}>ELIGE PROTEÍNA</span>}
+                  {(item.fixedIngredients || item.protein) && (
+                    <span style={{alignSelf:"flex-start",fontSize:10,color:"#9a7a3a",fontWeight:700,
+                      border:`1px solid ${G.gold}33`,borderRadius:999,padding:"2px 8px",margin:"0 0 6px"}}>
+                      {item.fixedIngredients ? "Ingredientes fijos" : "Elige proteína"}
+                    </span>
+                  )}
+                  <p style={{color:G.gold,fontWeight:900,fontSize:17,margin:"auto 0 0",paddingTop:4,fontFamily:"Georgia,serif"}}>${item.price}</p>
                 </div>
               </button>
             ))}
@@ -810,14 +867,22 @@ function POS({ onPedidoCreado, G }) {
       </div>
 
       {/* ─── RIGHT — Carrito ─── */}
-      <div style={{width: isMobile?"100%":320,maxHeight: isMobile?400:"none",
-        background:"#fdfaf4",borderLeft:`1px solid ${G.divider}`,
-        display:"flex",flexDirection:"column",boxShadow:"-4px 0 24px #00000018"}}>
+      <div id="pos-cart-panel" style={{width: isMobile?"100%":"clamp(320px, 28vw, 380px)",flexShrink:0,
+        background:"#fdfaf4",borderLeft:isMobile?"none":`1px solid ${G.divider}`,
+        borderTop:isMobile?`2px solid ${G.gold}`:"none",
+        display:"flex",flexDirection:"column",minHeight:0,boxShadow:"-4px 0 24px #00000018"}}>
 
         {/* Mesa / Mostrador */}
         <div style={{padding:"14px 16px",borderBottom:`1px solid ${G.divider}`,
           background:"#f5f1e8"}}>
-          <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 6px",letterSpacing:1.5}}>MESA / MOSTRADOR</p>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"0 0 6px"}}>
+            <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:0,letterSpacing:1.5}}>MESA / MOSTRADOR</p>
+            {itemCount>0 && (
+              <span style={{background:`${G.gold}22`,color:G.textSub,borderRadius:999,
+                padding:"2px 10px",fontSize:11,fontWeight:800}}>
+                {itemCount} {itemCount===1?"producto":"productos"}</span>
+            )}
+          </div>
           <input id="pos-mesa" value={mesa} onChange={e=>setMesa(e.target.value)}
             placeholder="Nº mesa — vacío = mostrador"
             style={{width:"100%",padding:"8px 12px",borderRadius:8,
@@ -826,7 +891,7 @@ function POS({ onPedidoCreado, G }) {
         </div>
 
         {/* Lista de items */}
-        <div style={{flex:1,overflowY:"auto",padding:"6px 0"}}>
+        <div className="pos-scroll" style={{flex:1,minHeight:isMobile?0:120,maxHeight:isMobile?300:"none",overflowY:"auto",padding:"6px 0"}}>
           {cart.length===0&&(
             <div style={{textAlign:"center",paddingTop:48}}>
               <p style={{color:"#b0a080",fontSize:13}}>Toca un producto para agregarlo</p>
@@ -838,8 +903,8 @@ function POS({ onPedidoCreado, G }) {
               padding:"10px 14px",borderBottom:`1px solid ${G.divider}44`,
               transition:"background .15s"}}>
               <div style={{flex:1,minWidth:0}}>
-                <p style={{color:G.dark,fontWeight:700,fontSize:13,margin:"0 0 2px",
-                  overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.nombre}</p>
+                <p style={{color:G.dark,fontWeight:700,fontSize:13.5,margin:"0 0 2px",lineHeight:1.3,
+                  overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{item.nombre}</p>
                 {item.esPaquete && item.itemsPaquete?.length > 0 && (
                   <div style={{margin:"2px 0 4px",padding:"4px 8px",background:"#fff8ee",borderRadius:6,
                     border:"1px solid #e8d5a033"}}>
@@ -882,14 +947,14 @@ function POS({ onPedidoCreado, G }) {
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
-                  <button id={`pos-minus-${i}`} onClick={()=>changeQty(i,-1)} style={smallBtn(G)}>−</button>
-                  <span style={{fontWeight:800,fontSize:13,minWidth:18,textAlign:"center"}}>{item.cantidad}</span>
-                  <button id={`pos-plus-${i}`} onClick={()=>changeQty(i,1)} style={smallBtn(G)}>+</button>
+                  <button id={`pos-minus-${i}`} className="qty-btn" onClick={()=>changeQty(i,-1)} style={qtyBtn(G)}>−</button>
+                  <span style={{fontWeight:800,fontSize:14,minWidth:22,textAlign:"center"}}>{item.cantidad}</span>
+                  <button id={`pos-plus-${i}`} className="qty-btn" onClick={()=>changeQty(i,1)} style={qtyBtn(G)}>+</button>
                 </div>
                 <p style={{color:G.gold,fontWeight:900,fontSize:14,margin:0,fontFamily:"Georgia,serif"}}>
                   ${item.subtotal}</p>
                 <button id={`pos-remove-${i}`} onClick={()=>removeItem(i)} style={{background:"none",border:"none",
-                  color:"#cc4444",cursor:"pointer",fontSize:12,padding:0}}>✕ quitar</button>
+                  color:"#cc4444",cursor:"pointer",fontSize:12,padding:"4px 0 2px"}}>✕ quitar</button>
               </div>
             </div>
           ))}
@@ -899,6 +964,8 @@ function POS({ onPedidoCreado, G }) {
         <div style={{borderTop:`2px solid ${G.divider}`,background:"#f5f1e8"}}>
           <div style={{padding:"12px 14px"}}>
 
+            {/* Zona con scroll propio (descuento + pago) para que Total y Cobrar nunca se escondan */}
+            <div className="pos-scroll" style={{maxHeight:isMobile?"none":"38vh",overflowY:isMobile?"visible":"auto",marginBottom:10}}>
             {/* Descuento — colapsado por default, no compite con el flujo principal */}
             {cart.length > 0 && (
               <DiscountPanel subtotal={subtotal} onChange={setDiscount} G={G} />
@@ -906,12 +973,12 @@ function POS({ onPedidoCreado, G }) {
 
             {/* Tarjeta: Método de pago */}
             <div style={{background:"#fff",borderRadius:10,padding:"12px 12px",
-              border:`1px solid ${G.divider}`,marginBottom:10}}>
+              border:`1px solid ${G.divider}`,marginBottom:0}}>
               <p style={{color:G.textSub,fontSize:10,fontWeight:800,margin:"0 0 8px",letterSpacing:1.5}}>MÉTODO DE PAGO</p>
               <div style={{display:"flex",gap:5}}>
                 {["efectivo","transferencia","terminal"].map(p=>(
                   <button key={p} id={`pos-payment-${p}`} className="pay-btn" onClick={()=>setPayment(p)} style={{
-                    flex:1,padding:"7px 4px",borderRadius:8,cursor:"pointer",fontSize:10,fontWeight:800,
+                    flex:1,padding:"10px 4px",minHeight:40,borderRadius:9,cursor:"pointer",fontSize:11,fontWeight:800,
                     border:`1.5px solid ${payment===p?G.gold:G.divider}`,
                     background:payment===p?G.gold:"transparent",
                     color:payment===p?G.dark:G.textSub,transition:"all .15s"}}>
@@ -946,11 +1013,13 @@ function POS({ onPedidoCreado, G }) {
               )}
             </div>
 
+            </div>
+
             {/* Total */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
               padding:"10px 12px",borderRadius:10,background:"#1a1108",marginBottom:12}}>
               <p style={{color:"#9a7a3a",fontWeight:800,fontSize:12,margin:0,letterSpacing:.5}}>TOTAL</p>
-              <p style={{color:G.gold,fontWeight:900,fontSize:22,margin:0,fontFamily:"Georgia,serif"}}>
+              <p style={{color:G.gold,fontWeight:900,fontSize:25,margin:0,fontFamily:"Georgia,serif"}}>
                 ${totalFinal.toFixed(2)}</p>
             </div>
 
@@ -975,10 +1044,10 @@ function POS({ onPedidoCreado, G }) {
             )}
 
             <button id="btn-cobrar" className="cobrar-btn" onClick={cobrar} disabled={sending||cart.length===0} style={{
-              width:"100%",padding:"13px",borderRadius:10,border:"none",
+              width:"100%",padding:"14px",minHeight:52,borderRadius:12,border:"none",
               background:cart.length===0?"#d4cfc6":`linear-gradient(135deg,${G.gold},${G.goldLight})`,
               color:cart.length===0?"#a09080":G.dark,
-              fontWeight:900,fontSize:15,cursor:cart.length===0?"not-allowed":"pointer",
+              fontWeight:900,fontSize:16,cursor:cart.length===0?"not-allowed":"pointer",
               boxShadow:cart.length>0?`0 4px 20px ${G.gold}44`:"none",
               transition:"all .2s",letterSpacing:.5}}>
               {sending?"⏳ Registrando...":"✓ Cobrar y enviar a cocina"}</button>
@@ -1001,11 +1070,25 @@ function POS({ onPedidoCreado, G }) {
         </div>
       </div>
 
+      {/* ─── Barra flotante (solo celular): resumen del pedido y salto al carrito ─── */}
+      {isMobile && cart.length>0 && !cartInView && (
+        <button id="pos-mobile-bar"
+          onClick={()=>document.getElementById("pos-cart-panel")?.scrollIntoView({behavior:"smooth",block:"start"})}
+          style={{position:"fixed",left:12,right:12,bottom:12,zIndex:90,minHeight:52,
+            display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
+            padding:"10px 18px",borderRadius:14,border:"none",cursor:"pointer",
+            background:`linear-gradient(135deg,${G.gold},${G.goldLight})`,color:G.dark,
+            fontWeight:900,fontSize:14,boxShadow:"0 8px 24px #00000066"}}>
+          <span>{itemCount} {itemCount===1?"producto":"productos"}</span>
+          <span style={{fontFamily:"Georgia,serif",fontSize:16}}>Ver pedido · ${totalFinal.toFixed(2)}</span>
+        </button>
+      )}
+
       {/* ─── Modal de paquete ─── */}
       {showPaqueteModal && (
         <div style={{position:"fixed",inset:0,background:"rgba(10,6,2,.75)",zIndex:500,
           display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}>
-          <div style={{background:"#1a1108",borderRadius:18,padding:28,width:360,maxWidth:"94vw",
+          <div style={{background:"#1a1108",borderRadius:18,padding:28,width:360,maxWidth:"94vw",maxHeight:"90vh",overflowY:"auto",
             border:`1.5px solid ${G.gold}44`,boxShadow:`0 24px 60px #0008`}}>
             <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
               <div>
@@ -1372,6 +1455,11 @@ function WAPedidoModal({ G, onClose, colRef }) {
   );
 }
 
+const qtyBtn=(G)=>({
+  width:32,height:32,borderRadius:10,border:`1.5px solid ${G.divider}`,
+  background:"#fff",cursor:"pointer",fontSize:17,display:"flex",color:G.dark,
+  alignItems:"center",justifyContent:"center",fontWeight:800,transition:"transform .1s"
+});
 const smallBtn=(G)=>({
   width:22,height:22,borderRadius:"50%",border:`1px solid ${G.divider}`,
   background:"transparent",cursor:"pointer",fontSize:13,display:"flex",
